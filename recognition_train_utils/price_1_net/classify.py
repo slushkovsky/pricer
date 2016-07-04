@@ -37,7 +37,6 @@ if __name__ == '__main__':
     transformer.set_raw_scale('data', 255)
 
     image = caffe.io.load_image(args.image)
-    print(image.shape)
     transformed_image = transformer.preprocess('data', image)
     
     net.blobs['data'].data[...] = transformed_image
