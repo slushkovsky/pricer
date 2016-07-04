@@ -10,5 +10,5 @@ import caffe
 
 caffe.set_device(0)
 caffe.set_mode_gpu()
-solver = caffe.AdaGradSolver("symbols_net_solver.prototxt")
+solver = caffe.AdaGradSolver("price_1_net_solver.prototxt")
 solver.solve()
