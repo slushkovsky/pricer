@@ -79,6 +79,7 @@ def generate_h5_db(marking_path, images_path,
                    n_chan=3,
                    image_size=(250,125),
                    original_image_size=(500, 250),
+                   use_abs_coords = False,
                    dataset_data_name='data',
                    dataset_label_name='label',
                    test=False):
@@ -101,6 +102,7 @@ def generate_h5_db(marking_path, images_path,
     image_size -- Конечный размер изображений.
     original_image_size -- размер исходных изображений, на которых проводилась
     разметка
+    use_abs_coords -- использовать абсолютные координаты в лейбле
     dataset_data_name -- имя поля изображений в бд.
     dataset_label_name -- имя поля лейблов в бд.
     test -- тестирование функции
@@ -169,26 +171,33 @@ def generate_h5_db(marking_path, images_path,
                         if test:
                             draw_img = copy.copy(img)
                             draw_img = _draw_contour(img, contour)
+                            draw_img = cv2.resize(draw_img, (500, 250))
                             cv2.imshow("contour", draw_img)
                             ret = cv2.waitKey() & 0xFF
                             if ret == 27:
                                 cv2.destroyAllWindows()
                                 test = False
-                            
                         
                         img = cv2.resize(img, image_size, 
                                          interpolation = cv2.INTER_CUBIC)
                         img = cv2.normalize(img.astype('float'), 
                                             None, 0.0, 1.0, cv2.NORM_MINMAX)
+                        
                         img = img.transpose((2,1,0))
+                        
+                        contour_shaped = copy.copy(contour)
+                        if use_abs_coords:
+                            for i in range(0, len(contour_shaped), 2):
+                                contour_shaped[i] *= img.shape[1]
+                                contour_shaped[i + 1] *= img.shape[2]
                     
                         if cur_total in test_samples:
                             data_test[cur_test] = img
-                            label_test[cur_test] = contour
+                            label_test[cur_test] = contour_shaped
                             cur_test += 1
                         else:
                             data_train[cur_train] = img
-                            label_train[cur_train] = contour
+                            label_train[cur_train] = contour_shaped
                             cur_train += 1
                         cur_total += 1
 

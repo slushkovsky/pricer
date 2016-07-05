@@ -33,13 +33,13 @@ def define_solver_params():
     params.test_net.append(NET_PROTO_TEST)
     params.test_iter.append(100)
     params.test_interval = 500
-    params.base_lr = 0.0001
+    params.base_lr = 0.001
     params.momentum = 0.9
-    params.weight_decay = 0.005
+    params.weight_decay = 0.001
     params.lr_policy = "inv"
     params.gamma = 0.01
     params.power =  0.75
-    params.display = 100
+    params.display = 500
     params.max_iter = 30000
     params.snapshot = 5000
     params.snapshot_prefix = NET_NAME
