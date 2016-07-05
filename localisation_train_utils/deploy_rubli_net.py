@@ -48,7 +48,7 @@ def define_solver_params():
     
 def add_base_layers(n):
     
-    n.conv1 = L.Convolution(bottom="data", 
+    n.conv1 = L.Convolution(n.data, 
                            num_output=20,
                            kernel_size=5,
                            stride=1,
@@ -101,19 +101,15 @@ def define_net_test(batch_size=64):
 
     
 def define_net_deploy():
-    n = caffe.NetSpec() 
-    n = add_base_layers(n)
-    
-    proto = 'input: "data"\n' \
-            'input_shape {\n' \
-            '  dim: 1 # batchsize\n' \
-            '  dim: 3 # number of colour channels - rgb\n' \
-            '  dim: 30 # width\n' \
-            '  dim: 15 # height\n' \
-            '}\n'
-            
-    proto += text_format.MessageToString(n.to_proto())
-    return proto
+    n = caffe.NetSpec()
+    shape = caffe_pb2.BlobShape()
+    shape.dim.append(1)
+    shape.dim.append(3)
+    shape.dim.append(30)
+    shape.dim.append(15)
+    n.data = L.Input(input_param=(dict(shape=shape)))
+    n = add_base_layers(n)            
+    return n.to_proto()
 
     
 def create_solver_params_proto():
@@ -144,7 +140,6 @@ if(path.exists(NET_PATH)):
 else:
     makedirs(NET_PATH)
 
-    
     create_solver_params_proto()
     shutil.copyfile("%s_net/get_rect.py"%(NET_NAME), NET_PATH + "/get_rect.py")
     shutil.copyfile("%s_net/train.py"%(NET_NAME), NET_PATH + "/train.py")
@@ -154,10 +149,10 @@ else:
         f.write(train_proto)
     
     with open(NET_PROTO_TEST, 'w') as f:
-        train_proto = text_format.MessageToString(define_net_test())
-        f.write(train_proto)
+        test_proto = text_format.MessageToString(define_net_test())
+        f.write(test_proto)
         
     with open(NET_PROTO_DEPLOY, 'w') as f:
-        train_proto = define_net_deploy()
-        f.write(train_proto)
+        deploy_proto = text_format.MessageToString(define_net_deploy())
+        f.write(deploy_proto)
 

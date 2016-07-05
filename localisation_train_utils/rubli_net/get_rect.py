@@ -31,11 +31,13 @@ def draw_contour(img, contour):
                      shape[0] // 100)
     return img
 
+    
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument('image')
     return parser.parse_args()
 
+    
 if __name__ == '__main__': 
     args = parse_args()
         
