@@ -1,28 +1,31 @@
-from os import path, makedirs
+from os import path, environ, makedirs
 import shutil
-
 import cv2
 import numpy as np
 
-def process_geom_file(filepath):
-    folder = path.dirname(filepath)
-    
-    batch_dir = "batchK"
-    if(path.exists(batch_dir)):
-        shutil.rmtree(batch_dir)
-    makedirs(batch_dir)
-    
-    print(folder)
-    with open(filepath) as file:
-        for line in file.readlines():
-            name, tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y = line.split()
-            image = cv2.imread(folder + "/" + name)
-            contour = np.array([ (tl_x, tl_y),
-                                 (tr_x, tr_y),
-                                 (br_x, br_y),
-                                 (bl_x, bl_y)], np.int)
-            cv2.drawContours(image, [contour], -1, (0,255,0),
-                             cv2.CHAIN_APPROX_TC89_KCOS)
-            cv2.imwrite(batch_dir + "/" + name, image)
+def process_geom_file(data_path, file_name, out_path):
+	file_path = '/'.join([data_path, file_name])
+	folder = path.dirname(file_path)
 
-process_geom_file("LData/kopeiki.txt")
+	if(path.exists(out_path)):
+		shutil.rmtree(out_path)
+	makedirs(out_path)
+	lfile = open(file_path, 'r')
+	for line in lfile.readlines():
+		img_name, tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y = line.split()
+		img_path = '/'.join([data_path, img_name])
+		img = cv2.imread(img_path)
+		contour = np.array([ (tl_x, tl_y), (tr_x, tr_y), (br_x, br_y), (bl_x, bl_y)], np.int)
+		cv2.drawContours(img, [contour], -1, (0,255,0), cv2.CHAIN_APPROX_TC89_KCOS)
+		img_outpath = '/'.join([out_path, img_name])
+		cv2.imwrite(img_outpath, img)
+	lfile.close()
+
+if __name__ == '__main__':
+	DATA_PATH = environ['BEORGDATAGEN'] + '/FinalData'
+	OUT_PATH = environ['BEORGDATAGEN'] + '/RubliContour'
+	process_geom_file(DATA_PATH, "rubli.txt", OUT_PATH)
+	OUT_PATH = environ['BEORGDATAGEN'] + '/KopeikiContour'
+	process_geom_file(DATA_PATH, "kopeiki.txt", OUT_PATH)
+	OUT_PATH = environ['BEORGDATAGEN'] + '/NameContour'
+	process_geom_file(DATA_PATH, "name.txt", OUT_PATH)

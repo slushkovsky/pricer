@@ -1,182 +1,238 @@
 import cv2
 import numpy as np
 import random
+import shutil
+from os import listdir
+from os import path, makedirs, environ
 
-frr = open('SData/rubli.txt', 'r')
-frk = open('SData/kopeiki.txt', 'r')
-frn = open('SData/name.txt', 'r')
-fwr = open('LData/rubli.txt', 'w')
-fwk = open('LData/kopeiki.txt', 'w')
-fwn = open('LData/name.txt', 'w')
+def Blur(param, img):
+	ker1 = int (random.random() * param) + 1
+	ker2 = int (random.random() * param) + 1
+	return cv2.blur(img,(ker1, ker2))
 
-k = 25
+def ChangeColors(param, img):
+	hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+	hsv[:,:,0] = hsv[:,:,0] + int(param * (random.random() - 0.5))
+	return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
-sr = frr.readline().split()
-sk = frk.readline().split()
-sn = frn.readline().split()
+def Gamma(param, img):
+	gamma = random.random() * param + 0.25
+	invGamma = 1.0 / gamma
+	table = np.array([((j / 255.0) ** invGamma) * 255
+		for j in np.arange(0, 256)]).astype("uint8")
+	return cv2.LUT(img, table)
 
-while(len(sr) != 0):
-	print sr[0]
-	
-	pr1, pr2, pr3, pr4 = sr[1:3], sr[3:5], sr[5:7], sr[7:9]
-	pr1 = [int(pr1[0]), int(pr1[1])]
-	pr2 = [int(pr2[0]), int(pr2[1])]
-	pr3 = [int(pr3[0]), int(pr3[1])]
-	pr4 = [int(pr4[0]), int(pr4[1])]
+def RotateMatrix(param, matrix, img):
+	rows, cols, ch  = img.shape
+	M = cv2.getRotationMatrix2D((cols/2, rows/2), param, 1)
+	lst = list(np.dot(M, matrix))
+	lst.append([1, 1, 1, 1])
+	return lst
 
-	pk1, pk2, pk3, pk4 = sk[1:3], sk[3:5], sk[5:7], sk[7:9]
-	pk1 = [int(pk1[0]), int(pk1[1])]
-	pk2 = [int(pk2[0]), int(pk2[1])]
-	pk3 = [int(pk3[0]), int(pk3[1])]
-	pk4 = [int(pk4[0]), int(pk4[1])]
+def RotateImg(param, img):
+	rows, cols, ch  = img.shape
+	deg = param * 2 * (random.random() - 0.5)
+	M = cv2.getRotationMatrix2D((cols/2, rows/2), deg, 1)
+	img = cv2.warpAffine(img,M,(cols,rows))
+	return img, deg
 
-	pn1, pn2, pn3, pn4 = sn[1:3], sn[3:5], sn[5:7], sn[7:9]
-	pn1 = [int(pn1[0]), int(pn1[1])]
-	pn2 = [int(pn2[0]), int(pn2[1])]
-	pn3 = [int(pn3[0]), int(pn3[1])]
-	pn4 = [int(pn4[0]), int(pn4[1])]
-	
-	for i in range(k):
+def TranslateMatrix(param, matrix):
+	dx, dy = param
+	M = np.float32([[1, 0, dx], [0, 1, dy]])
+	lst = list(np.dot(M, matrix))
+	lst.append([1, 1, 1, 1])
+	return lst
 
-		ppr1 = pr1
-		ppr2 = pr2
-		ppr3 = pr3
-		ppr4 = pr4
-		
-		ppk1 = pk1
-		ppk2 = pk2
-		ppk3 = pk3
-		ppk4 = pk4
-		
-		ppn1 = pn1
-		ppn2 = pn2
-		ppn3 = pn3
-		ppn4 = pn4
-		
-		img = cv2.imread("./SData/" + sr[0])
-		rows,cols, ch  = img.shape
+def TranslateImg(param, img):
+	max_dx, max_dy = param
+	rows, cols, ch  = img.shape
+	dx = (random.random() - 0.5) * cols * max_dx
+	dy = (random.random() - 0.5) * rows * max_dy
+	M = np.float32([[1, 0, dx], [0, 1, dy]])
+	img = cv2.warpAffine(img,M,(cols,rows))
+	return img, (dx, dy)
 
-		###########BLURING
-		ker1 = int (random.random() * 15) + 1
-		ker2 = int (random.random() * 15) + 1
-		img = cv2.blur(img,(ker1, ker2))
-		##################
+def PerspectiveMatrix(param, matrix, img):
+	rows, cols, ch  = img.shape
+	x1, y1, x2, y2, x3, y3, x4, y4 = param
 
-		############COLORS
-		hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-		hsv[:,:,0] = hsv[:,:,0] + int(40 * (random.random() - 0.5))
-		img = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-		##################
+	pts1 = np.float32([[x1, y1],[300 - x2, y2],[x3,300 - y3],[300 - x4,300 - y4]])
+	pts2 = np.float32([[0,0],[300,0],[0,300],[300,300]])
+	M = cv2.getPerspectiveTransform(pts1,pts2)
 
-		#############GAMMA
-		gamma = random.random() * 2.5 + 0.25
-		invGamma = 1.0 / gamma
-		table = np.array([((j / 255.0) ** invGamma) * 255
-			for j in np.arange(0, 256)]).astype("uint8")
-		img = cv2.LUT(img, table)
-		##################
+	matrix = np.dot(M, matrix)
+	for j in range(4):
+		for i in range(3):
+			matrix[i][j] /= matrix[2][j]
+	return matrix
 
-		##########ROTATION
-		deg = 5
-		deg *= 2 * (random.random() - 0.5)
-		M = cv2.getRotationMatrix2D((cols/2,rows/2), deg, 1)
-		
-		ppr1 = [ppr1[0] * M[0][0] + ppr1[1] * M[0][1] + M[0][2], ppr1[0] * M[1][0] + ppr1[1] * M[1][1] + M[1][2]]
-		ppr2 = [ppr2[0] * M[0][0] + ppr2[1] * M[0][1] + M[0][2], ppr2[0] * M[1][0] + ppr2[1] * M[1][1] + M[1][2]]
-		ppr3 = [ppr3[0] * M[0][0] + ppr3[1] * M[0][1] + M[0][2], ppr3[0] * M[1][0] + ppr3[1] * M[1][1] + M[1][2]]
-		ppr4 = [ppr4[0] * M[0][0] + ppr4[1] * M[0][1] + M[0][2], ppr4[0] * M[1][0] + ppr4[1] * M[1][1] + M[1][2]]
-		
-		ppk1 = [ppk1[0] * M[0][0] + ppk1[1] * M[0][1] + M[0][2], ppk1[0] * M[1][0] + ppk1[1] * M[1][1] + M[1][2]]
-		ppk2 = [ppk2[0] * M[0][0] + ppk2[1] * M[0][1] + M[0][2], ppk2[0] * M[1][0] + ppk2[1] * M[1][1] + M[1][2]]
-		ppk3 = [ppk3[0] * M[0][0] + ppk3[1] * M[0][1] + M[0][2], ppk3[0] * M[1][0] + ppk3[1] * M[1][1] + M[1][2]]
-		ppk4 = [ppk4[0] * M[0][0] + ppk4[1] * M[0][1] + M[0][2], ppk4[0] * M[1][0] + ppk4[1] * M[1][1] + M[1][2]]
-		
-		ppn1 = [ppn1[0] * M[0][0] + ppn1[1] * M[0][1] + M[0][2], ppn1[0] * M[1][0] + ppn1[1] * M[1][1] + M[1][2]]
-		ppn2 = [ppn2[0] * M[0][0] + ppn2[1] * M[0][1] + M[0][2], ppn2[0] * M[1][0] + ppn2[1] * M[1][1] + M[1][2]]
-		ppn3 = [ppn3[0] * M[0][0] + ppn3[1] * M[0][1] + M[0][2], ppn3[0] * M[1][0] + ppn3[1] * M[1][1] + M[1][2]]
-		ppn4 = [ppn4[0] * M[0][0] + ppn4[1] * M[0][1] + M[0][2], ppn4[0] * M[1][0] + ppn4[1] * M[1][1] + M[1][2]]
-		img = cv2.warpAffine(img,M,(cols,rows))
-		##################
+def PerspectiveImg(param, img):
+	rows, cols, ch  = img.shape
+	x1, y1  = random.random() * param, random.random() * param
+	x2, y2  = random.random() * param, random.random() * param
+	x3, y3  = random.random() * param, random.random() * param
+	x4, y4  = random.random() * param, random.random() * param
+	pts1 = np.float32([[x1, y1],[300 - x2, y2],[x3,300 - y3],[300 - x4,300 - y4]])
+	pts2 = np.float32([[0,0],[300,0],[0,300],[300,300]])
+	M = cv2.getPerspectiveTransform(pts1,pts2)
+	img = cv2.warpPerspective(img, M, (cols, rows))
+	return img, (x1, y1, x2, y2, x3, y3, x4, y4)
 
-		#######TRANSLATION 
-		#dx = (random.random() - 1) * cols * 0.05
-		#dy = (random.random() - 1) * rows * 0.2
-		#pp1 += [dx, dy]
-		#pp2 += [dx, dy]
-		#pp3 += [dx, dy]
-		#pp4 += [dx, dy]
-		#M = np.float32([[1, 0, dx], [0, 1, dy]])
-		#img = cv2.warpAffine(img,M,(cols,rows))
-		##################
+def GetCords(lst):
+	ans =  [[int(lst[1])], [int(lst[2])], [1]]
+	for i in range(3):
+		ans[i] += [[int(lst[3])], [int(lst[4])], [1]][i]
+		ans[i] += [[int(lst[5])], [int(lst[6])], [1]][i] 
+		ans[i] += [[int(lst[7])], [int(lst[8])], [1]][i]
+	return ans
+	#return [[int(lst[1]), int(lst[2]), 1] , [int(lst[3]), int(lst[4]), 1], [int(lst[5]), int(lst[6]), 1], [int(lst[7]), int(lst[8]), 1]]
 
-		#######PERSPECTIVE
-		deg = 5
-		x1, y1  = random.random() * deg, random.random() * deg
-		x2, y2  = random.random() * deg, random.random() * deg
-		x3, y3  = random.random() * deg, random.random() * deg
-		x4, y4  = random.random() * deg, random.random() * deg
-		pts1 = np.float32([[x1, y1],[300 - x2, y2],[x3,300 - y3],[300 - x4,300 - y4]])
-		pts2 = np.float32([[0,0],[300,0],[0,300],[300,300]])
-		M = cv2.getPerspectiveTransform(pts1,pts2)
-		
-		tr1 = M[2][0] * ppr1[0] + M[2][1] * ppr1[1] + M[2][2]
-		ppr1 = [(ppr1[0] * M[0][0] + ppr1[1] * M[0][1] + M[0][2]) / tr1, (ppr1[0] * M[1][0] + ppr1[1] * M[1][1] + M[1][2]) / tr1]
-		tr2 = M[2][0] * ppr2[0] + M[2][1] * ppr2[1] + M[2][2]
-		ppr2 = [(ppr2[0] * M[0][0] + ppr2[1] * M[0][1] + M[0][2]) / tr2, (ppr2[0] * M[1][0] + ppr2[1] * M[1][1] + M[1][2]) / tr2]
-		tr3 = M[2][0] * ppr3[0] + M[2][1] * ppr3[1] + M[2][2]
-		ppr3 = [(ppr3[0] * M[0][0] + ppr3[1] * M[0][1] + M[0][2]) / tr3, (ppr3[0] * M[1][0] + ppr3[1] * M[1][1] + M[1][2]) / tr3]
-		tr4 = M[2][0] * ppr4[0] + M[2][1] * ppr4[1] + M[2][2]
-		ppr4 = [(ppr4[0] * M[0][0] + ppr4[1] * M[0][1] + M[0][2]) / tr4, (ppr4[0] * M[1][0] + ppr4[1] * M[1][1] + M[1][2]) / tr4]
-		
-		tk1 = M[2][0] * ppk1[0] + M[2][1] * ppk1[1] + M[2][2]
-		ppk1 = [(ppk1[0] * M[0][0] + ppk1[1] * M[0][1] + M[0][2]) / tk1, (ppk1[0] * M[1][0] + ppk1[1] * M[1][1] + M[1][2]) / tk1]
-		tk2 = M[2][0] * ppk2[0] + M[2][1] * ppk2[1] + M[2][2]
-		ppk2 = [(ppk2[0] * M[0][0] + ppk2[1] * M[0][1] + M[0][2]) / tk2, (ppk2[0] * M[1][0] + ppk2[1] * M[1][1] + M[1][2]) / tk2]
-		tk3 = M[2][0] * ppk3[0] + M[2][1] * ppk3[1] + M[2][2]
-		ppk3 = [(ppk3[0] * M[0][0] + ppk3[1] * M[0][1] + M[0][2]) / tk3, (ppk3[0] * M[1][0] + ppk3[1] * M[1][1] + M[1][2]) / tk3]
-		tk4 = M[2][0] * ppk4[0] + M[2][1] * ppk4[1] + M[2][2]
-		ppk4 = [(ppk4[0] * M[0][0] + ppk4[1] * M[0][1] + M[0][2]) / tk4, (ppk4[0] * M[1][0] + ppk4[1] * M[1][1] + M[1][2]) / tk4]
-		
-		tn1 = M[2][0] * ppn1[0] + M[2][1] * ppn1[1] + M[2][2]
-		ppn1 = [(ppn1[0] * M[0][0] + ppn1[1] * M[0][1] + M[0][2]) / tn1, (ppn1[0] * M[1][0] + ppn1[1] * M[1][1] + M[1][2]) / tn1]
-		tn2 = M[2][0] * ppn2[0] + M[2][1] * ppn2[1] + M[2][2]
-		ppn2 = [(ppn2[0] * M[0][0] + ppn2[1] * M[0][1] + M[0][2]) / tn2, (ppn2[0] * M[1][0] + ppn2[1] * M[1][1] + M[1][2]) / tn2]
-		tn3 = M[2][0] * ppn3[0] + M[2][1] * ppn3[1] + M[2][2]
-		ppn3 = [(ppn3[0] * M[0][0] + ppn3[1] * M[0][1] + M[0][2]) / tn3, (ppn3[0] * M[1][0] + ppn3[1] * M[1][1] + M[1][2]) / tn3]
-		tn4 = M[2][0] * ppn4[0] + M[2][1] * ppn4[1] + M[2][2]
-		ppn4 = [(ppn4[0] * M[0][0] + ppn4[1] * M[0][1] + M[0][2]) / tn4, (ppn4[0] * M[1][0] + ppn4[1] * M[1][1] + M[1][2]) / tn4]
-		
-		img = cv2.warpPerspective(img,M,(cols, rows))
-		##################
+def WriteMatrix(matrix, new_img_name, outfile):
+	outfile.write(new_img_name + ' ')
+	lst = []
+	for i in range(4):
+		lst += [matrix[0][i], matrix[1][i]]
+	str_lst = [str(int(i)) for i in lst]
+	outfile.write(' '.join(str_lst) + '\n')
 
-		ppr1 = [str(int(ppr1[0])), str(int(ppr1[1]))]
-		ppr2 = [str(int(ppr2[0])), str(int(ppr2[1]))]
-		ppr3 = [str(int(ppr3[0])), str(int(ppr3[1]))]
-		ppr4 = [str(int(ppr4[0])), str(int(ppr4[1]))]
+def IncreaseDataPricer(repeats, data_path, rubl_file_name, kope_file_name, name_file_name, out_path):
+	if(path.exists(out_path)):
+		shutil.rmtree(out_path)
+	makedirs(out_path)
 
-		ppk1 = [str(int(ppk1[0])), str(int(ppk1[1]))]
-		ppk2 = [str(int(ppk2[0])), str(int(ppk2[1]))]
-		ppk3 = [str(int(ppk3[0])), str(int(ppk3[1]))]
-		ppk4 = [str(int(ppk4[0])), str(int(ppk4[1]))]
+	rubl_file_path = '/'.join([data_path, rubl_file_name])
+	kope_file_path = '/'.join([data_path, kope_file_name])
+	name_file_path = '/'.join([data_path, name_file_name])
+	rubl_outfile_path = '/'.join([out_path, rubl_file_name])
+	kope_outfile_path = '/'.join([out_path, kope_file_name])
+	name_outfile_path = '/'.join([out_path, name_file_name])
 
-		ppn1 = [str(int(ppn1[0])), str(int(ppn1[1]))]
-		ppn2 = [str(int(ppn2[0])), str(int(ppn2[1]))]
-		ppn3 = [str(int(ppn3[0])), str(int(ppn3[1]))]
-		ppn4 = [str(int(ppn4[0])), str(int(ppn4[1]))]
-		
-		sp = ' '
-		fwr.write(sr[0][0: len(sr[0]) - 4] + '_' + str(i) + '.jpg' + ' ' + sp.join(ppr1 + ppr2 + ppr3 + ppr4) + '\n')
-		fwk.write(sr[0][0: len(sr[0]) - 4] + '_' + str(i) + '.jpg' + ' ' + sp.join(ppk1 + ppk2 + ppk3 + ppk4) + '\n')
-		fwn.write(sr[0][0: len(sr[0]) - 4] + '_' + str(i) + '.jpg' + ' ' + sp.join(ppn1 + ppn2 + ppn3 + ppn4) + '\n')
-		cv2.imwrite('./LData/' + sr[0][0: len(sr[0]) - 4] + '_' + str(i) + '.jpg',img)
+	rubl_infile = open(rubl_file_path, 'r')
+	kope_infile = open(kope_file_path, 'r')
+	name_infile = open(name_file_path, 'r')
+	rubl_outfile = open(rubl_outfile_path, 'w')
+	kope_outfile = open(kope_outfile_path, 'w')
+	name_outfile = open(name_outfile_path, 'w')
 
-	sr = frr.readline().split()
-	sk = frk.readline().split()
-	sn = frn.readline().split()
+	inpR = rubl_infile.readline().split()
+	inpK = kope_infile.readline().split()
+	inpN = name_infile.readline().split()
 
-frr.close()
-frk.close()
-frn.close()
-fwr.close()
-fwk.close()
-fwn.close()
+	while(len(inpR) != 0 and len(inpK) != 0 and len(inpN) != 0):
+		RublMatrix = GetCords(inpR)
+		KopeMatrix = GetCords(inpK)
+		NameMatrix = GetCords(inpN)
+		print inpR[0]
+		for i in range(repeats):
+			RublMatrix_i = RublMatrix
+			KopeMatrix_i = KopeMatrix
+			NameMatrix_i = NameMatrix
+
+			if (inpR[0] != inpK[0] or inpR[0] != inpN[0]):
+				print 'Local files contradict each other'
+				return -1
+			img_name = inpR[0]
+			img_path = '/'.join([data_path, img_name])
+			img = cv2.imread(img_path)
+
+			img = Blur(15, img)
+			img = ChangeColors(40, img)
+			img = Gamma(2.5, img)
+
+			img, deg = RotateImg(6, img)
+			RublMatrix_i = RotateMatrix(deg, RublMatrix_i, img)
+			KopeMatrix_i = RotateMatrix(deg, KopeMatrix_i, img)
+			NameMatrix_i = RotateMatrix(deg, NameMatrix_i, img)
+
+			img, tr = TranslateImg((0.05, 0.05), img)
+			RublMatrix_i = TranslateMatrix(tr, RublMatrix_i)
+			KopeMatrix_i = TranslateMatrix(tr, KopeMatrix_i)
+			NameMatrix_i = TranslateMatrix(tr, NameMatrix_i)
+
+			img, pr = PerspectiveImg(25, img)
+			RublMatrix_i = PerspectiveMatrix(pr, RublMatrix_i, img)
+			KopeMatrix_i = PerspectiveMatrix(pr, KopeMatrix_i, img)
+			NameMatrix_i = PerspectiveMatrix(pr, NameMatrix_i, img)
+
+			new_img_name = img_name[0: len(img_name) - 4] + '_' + str(i) + '.jpg'
+			new_img_path = '/'.join([out_path, new_img_name])
+			WriteMatrix(RublMatrix_i, new_img_name, rubl_outfile)
+			WriteMatrix(KopeMatrix_i, new_img_name, kope_outfile)
+			WriteMatrix(NameMatrix_i, new_img_name, name_outfile)
+			cv2.imwrite(new_img_path, img)
+
+		inpR = rubl_infile.readline().split()
+		inpK = kope_infile.readline().split()
+		inpN = name_infile.readline().split()
+
+	rubl_infile.close()
+	kope_infile.close()
+	name_infile.close()
+	rubl_outfile.close()
+	kope_outfile.close()
+	name_outfile.close()
+
+def IncreaseDataCords(repeats, data_path, file_name, out_path):
+	if(path.exists(out_path)):
+		shutil.rmtree(out_path)
+	makedirs(out_path)
+	file_path = '/'.join([data_path, file_name])
+	outfile_path = '/'.join([out_path, file_name])
+	infile = open(file_path, 'r')
+	outfile = open(outfile_path, 'w')
+	inp = infile.readline().split()
+
+	while(len(inp) != 0):
+		matrix = GetCords(inp)
+		for i in range(repeats):
+			matrix_i = matrix
+			img_name = inp[0]
+			img_path = '/'.join([data_path, img_name])
+			img = cv2.imread(img_path)
+
+			img = Blur(15, img)
+			img = ChangeColors(40, img)
+			img = Gamma(2.5, img)
+			img, deg = RotateImg(5, img)
+			matrix_i = RotateMatrix(deg, matrix, img)
+			img, tr = TranslateImg((0.05, 0.005), img)
+			matrix_i = TranslateMatrix(tr, matrix)
+			img, pr = PerspectiveImg(25, img)
+			matrix_i = PerspectiveMatrix(pr, matrix, img)
+
+			new_img_name = img_name[0: len(img_name) - 4] + '_' + str(i) + '.jpg'
+			new_img_path = '/'.join([out_path, new_img_name])
+			WriteMatrix(matrix_i, new_img_name, outfile)
+			cv2.imwrite(new_img_path, img)
+		inp = infile.readline().split()
+
+	infile.close()
+	outfile.close()
+
+
+def IncreaseData(repeats, data_path, out_path):
+	if(path.exists(out_path)):
+		shutil.rmtree(out_path)
+	makedirs(out_path)
+
+	files = listdir(data_path)
+	jpg = filter(lambda x: x.endswith('.jpg'), files)
+	for img_name in jpg:
+		print img_name
+		img_path = '/'.join([data_path, img_name]) 
+		for i in range(repeats):
+			img = cv2.imread(img_path)
+			img = Blur(15, img)
+			img = ChangeColors(40, img)
+			img = Gamma(2.5, img)
+			img, deg = RotateImg(5, img)
+			img, tr = TranslateImg((0.05, 0.05), img)
+			img, pr = PerspectiveImg(25, img)
+			new_img_name = img_name[0: len(img_name) - 4] + '_' + str(i) + '.jpg'
+			new_img_path = '/'.join([out_path, new_img_name])
+			cv2.imwrite(new_img_path, img)
+
+if __name__ == '__main__':
+	DATA_PATH = environ['BEORGDATAGEN'] + '/CropedImages'
+	OUT_PATH = environ['BEORGDATAGEN'] + '/FinalData'
+	IncreaseDataPricer(25, DATA_PATH, 'rubli.txt', 'kopeiki.txt', 'name.txt', OUT_PATH)
