@@ -8,7 +8,12 @@ def process_geom_file(data_path, file_name, out_path):
 	folder = path.dirname(file_path)
 
 	if(path.exists(out_path)):
-		shutil.rmtree(out_path)
+		ans = raw_input('Path already exist. Would you like delete it? y/n \n')
+		if ans == 'y':
+			shutil.rmtree(out_path)
+		else:
+			print 'Specify a different path'
+			return
 	makedirs(out_path)
 	lfile = open(file_path, 'r')
 	for line in lfile.readlines():

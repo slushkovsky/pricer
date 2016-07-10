@@ -5,7 +5,12 @@ from os import path, makedirs, environ
 
 def CropAndNormalize(data_path, local_file_name, out_path, resolution):
 	if(path.exists(out_path)):
-		shutil.rmtree(out_path)
+		ans = raw_input('Path already exist. Would you like delete it? y/n \n')
+		if ans == 'y':
+			shutil.rmtree(out_path)
+		else:
+			print 'Specify a different path'
+			return
 	makedirs(out_path)
 
 	resolution_w = resolution[0]

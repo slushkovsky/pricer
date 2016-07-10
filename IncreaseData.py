@@ -97,7 +97,12 @@ def WriteMatrix(matrix, new_img_name, outfile):
 
 def IncreaseDataPricer(repeats, data_path, rubl_file_name, kope_file_name, name_file_name, out_path):
 	if(path.exists(out_path)):
-		shutil.rmtree(out_path)
+		ans = raw_input('Path already exist. Would you like delete it? y/n \n')
+		if ans == 'y':
+			shutil.rmtree(out_path)
+		else:
+			print 'Specify a different path'
+			return
 	makedirs(out_path)
 
 	rubl_file_path = '/'.join([data_path, rubl_file_name])
@@ -174,7 +179,12 @@ def IncreaseDataPricer(repeats, data_path, rubl_file_name, kope_file_name, name_
 
 def IncreaseDataCords(repeats, data_path, file_name, out_path):
 	if(path.exists(out_path)):
-		shutil.rmtree(out_path)
+		ans = raw_input('Path already exist. Would you like delete it? y/n \n')
+		if ans == 'y':
+			shutil.rmtree(out_path)
+		else:
+			print 'Specify a different path'
+			return
 	makedirs(out_path)
 	file_path = '/'.join([data_path, file_name])
 	outfile_path = '/'.join([out_path, file_name])
@@ -212,7 +222,12 @@ def IncreaseDataCords(repeats, data_path, file_name, out_path):
 
 def IncreaseData(repeats, data_path, out_path):
 	if(path.exists(out_path)):
-		shutil.rmtree(out_path)
+		ans = raw_input('Path already exist. Would you like delete it? y/n \n')
+		if ans == 'y':
+			shutil.rmtree(out_path)
+		else:
+			print 'Specify a different path'
+			return
 	makedirs(out_path)
 
 	files = listdir(data_path)
