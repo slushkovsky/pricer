@@ -23,7 +23,7 @@ DATASET_NAME = "symbols"
 
 DB_PATH = 'sqlite:///%s/marked_pricers/db/%s.db'%(environ["BEORGDATA"],
                                                   DATASET_NAME)
-DATA_DIR = environ["BEORGDATAGEN"] + "/CData_full"
+DATA_DIR = environ["BEORGDATAGEN"] + "/CData"
 
 if __name__ == '__main__':
     locale.setlocale(locale.LC_ALL, 'ru_RU.UTF8')
@@ -32,8 +32,8 @@ if __name__ == '__main__':
     Base.metadata.create_all(engine)
     session = (sessionmaker(bind=engine))()
     
-    #db_editor_ = DbEditor(DATA_DIR, session)
-    #db_editor_.start_marking()
+    db_editor_ = DbEditor(DATA_DIR, session)
+    db_editor_.start_marking()
     
     #view_lmdb(DATA_DIR + "/" + DATASET_NAME +"_lmdb_test")
     #convert_symbol_to_rel(DATA_DIR, session)

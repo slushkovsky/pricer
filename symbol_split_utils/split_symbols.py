@@ -268,8 +268,6 @@ if __name__ == "__main__":
         print("%s found, skip croping. To force restart delete this folder"
               %(DATASET_PATH))
     
-    
-        
     i = 0
     for image_name in listdir(DATASET_PATH):
         if i < 0:
@@ -296,5 +294,5 @@ if __name__ == "__main__":
         k = cv2.waitKey() & 0xFF
         if k == 27:
             break
-    
+
     cv2.destroyAllWindows()
