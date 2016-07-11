@@ -38,6 +38,6 @@ if __name__ == '__main__':
     #view_lmdb(DATA_DIR + "/" + DATASET_NAME +"_lmdb_test")
     #convert_symbol_to_rel(DATA_DIR, session)
     generate_lmdb(DATA_DIR, session, DATASET_NAME)
-    #flush_db(DATA_DIR, session, DATASET_NAME)
+    #flush_db(DATA_DIR, DATASET_NAME, session)
     #correct_db(DATA_DIR, session, DATASET_NAME)
 

@@ -8,13 +8,19 @@ Created on Sat Jul  2 16:59:37 2016
 
 import random
 from datetime import datetime
-from os import listdir, makedirs, path
+from os import listdir, makedirs, path, environ
+import sys
 import shutil
 import json
 
+main_dir = path.dirname(__file__)
+if not main_dir in sys.path:
+    sys.path.append(main_dir)
+
 import cv2
-from sqlalchemy import Column, String, DateTime, Integer, Float
+from sqlalchemy import Column, String, DateTime, Integer, Float, create_engine
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 import lmdb
 import numpy as np
 import caffe
@@ -239,10 +245,15 @@ def generate_lmdb(image_directory, session, dataset_name,
     print("test images size: %s"%(j))
     
         
-def flush_db(image_directory, session, dataset_name,
-             increase=True):
-    out_dir = image_directory + "/" + dataset_name
+def flush_db(image_directory, dataset_name, session=None):
+    if not session:
+        db_path = 'sqlite:///%s/marked_pricers/db/%s.db'%(environ["BEORGDATA"],
+                                                  dataset_name)
+        engine = create_engine(db_path)
+        Base.metadata.create_all(engine)
+        session = (sessionmaker(bind=engine))()
     
+    out_dir = image_directory + "/" + dataset_name
     if(path.exists(out_dir)):
         shutil.rmtree(out_dir)
     makedirs(out_dir)
@@ -253,6 +264,7 @@ def flush_db(image_directory, session, dataset_name,
         symbol_out_path = out_dir + "/%s_%s_%s"%(symbol.label, symbol.id,
                                                  symbol.image)
         cv2.imwrite(symbol_out_path, symbol_image)
+        
         
 def convert_symbol_to_rel(image_directory, session):
     symbols = session.query(Symbol)

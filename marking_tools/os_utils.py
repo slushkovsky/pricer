@@ -18,7 +18,7 @@ def ask_dir():
     return img_path
     
 def show_hist(hist, bins, xticks=None):
-    width = 0.9 * (bins[1] - bins[0])
+    width = 1.0 * (bins[1] - bins[0])
     center = (bins[:-1] + bins[1:]) / 2
 
     rc('font', family='DejaVu Sans')
