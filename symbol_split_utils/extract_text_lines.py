@@ -17,7 +17,7 @@ if not pricer_dir in sys.path:
     sys.path.append(pricer_dir)
 del pricer_dir
 
-from split_hist import split_lines_hist, crop_regions
+from split_hist import split_lines_hist, crop_regions, get_begin_end_text_line
 
 DATASET_NAME = "names"
 DATA_PATH = environ["BEORGDATAGEN"] + "/CData_full"
@@ -44,9 +44,9 @@ if __name__ == '__main__':
     if args.path:
         imgs = None
         folder = None
-        if path.isdir(path):
-            imgs = listdir(path)
-            folder = path
+        if path.isdir(args.path):
+            imgs = listdir(args.path)
+            folder = args.path
         else:
             imgs = [path.basename(args.path)]
             folder = path.dirname(path.realpath(args.path))
@@ -59,8 +59,13 @@ if __name__ == '__main__':
             
             regions = crop_regions(split_lines_hist(img), img.shape[0]*0.15)
             for region in regions:
-                cv2.rectangle(img, (0,region[0]),
-                                    (img.shape[1],region[1]), (0,0,255), 3)
+                line = img[region[0]:region[1], :]
+                regions_x = get_begin_end_text_line(line, test=True)
+                cv2.rectangle(img, (0,region[0]), 
+                              (img.shape[1],region[1]), (0,0,255), 3)
+                for region_x in regions_x:
+                    cv2.rectangle(img, (region_x[0], region[0]), 
+                                  (region_x[1], region[1]), (255,0,0, 100), 2)
                 
             cv2.imshow("img", cv2.resize(img, (600, 200)))
     

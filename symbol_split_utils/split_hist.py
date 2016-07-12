@@ -22,7 +22,13 @@ import cv2
 from marking_tools.os_utils import show_hist
 
 def extract_regions_from_hist(hist, treshold):
+    """Выделение регионов по гистограмме и порогу
     
+    Keyword arguments:
+    hist -- Входная гистограмма.
+    treshold -- Порог. Может быть или числом или массивом с числами такой же
+                длины как и гистограмма.
+    """
     if not hasattr(treshold, '__iter__'):
         th = np.full(len(hist), treshold)
     else:
@@ -52,20 +58,92 @@ def extract_regions_from_hist(hist, treshold):
     return parts
     
     
-def crop_regions(parts, merge_treshold = 10):
+def crop_regions(parts, minima_merge_tresh = 10):
+    """Удаление мелких регионов
+    
+    Keyword arguments:
+    parts -- регионы
+    minima_merge_tresh -- минимальный размер региона в пикселях
+    """
     parts_merged = []
     for part in parts:
-        if abs(part[1] - part[0]) > merge_treshold:
+        if abs(part[1] - part[0]) > minima_merge_tresh:
             parts_merged.append(part)
     return parts_merged
+  
+    
+def get_begin_end_text_line(img, h_crop_perc=0.3,
+                            treshold_coeff=0.3,
+                            conv_size = 0.1,
+                            test=False):
+    img_h = img.shape[0]
+    line_croped = img[int(img_h*h_crop_perc):int(img_h*(1-h_crop_perc)),:]
+
+    gray = cv2.cvtColor(line_croped,cv2.COLOR_BGR2GRAY)
+    binary = np.abs(cv2.Laplacian(gray, cv2.CV_64F))
+
+    hist = binary.sum(axis=0)
+
+    hist_2, bins = np.histogram(hist, 200)
+    hist_2 = np.convolve(hist_2, np.ones(20), 'same')
+    
+    minima = argrelextrema(hist_2, np.less, order=1)[0]
+    maxima = argrelextrema(hist_2, np.greater, order=len(hist_2)//4)[0]
+
+    sum_hist = np.cumsum(hist_2/hist_2.sum())
+    
+    minima = np.delete(minima, np.where(bins[minima] > bins.max()*0.4))
+
+    if test:
+        print("minima", bins[minima])
+        print("maxima", bins[maxima])
+        #show_hist(sum_hist, bins)
+        show_hist(hist_2, bins)
+    
+    treshold = 0
+    print(len(maxima))
+    if len(maxima) >= 2:
+        min_inside = np.where(np.logical_and(minima >= maxima[0],
+                                             minima <= maxima[1]))[0]
+        if len(min_inside) > 0:
+            treshold = bins[minima[min_inside.min()]]
+            print(sum_hist[minima[min_inside.min()]])
+            
+    if test:
+        print(treshold)
+            
+    return extract_regions_from_hist(hist, treshold)
     
     
-def split_lines_hist(img, test = False):
+def split_lines_hist(img, minima_coef=1.001, minima_merge_tresh=0.15,
+                     conv_kern_size=0.05, extremum_order=0.125,
+                     test=False):
+    """Разделение текста на строки по построчной гистограмме суммы лапласианов.
     
-    TRESHOLD_COEF = 1.001
-    CONVOLUTION_KERNEL_SIZE = 0.05
-    MERGE_TRESHOLD = 0.15
-    EXTREMUM_ORDER = 0.125
+    Описание алгоритма:
+    1. К изображению применяется лаплассиан
+    2. На лапласиане для каждой строки ищется сумма интенсивностей. Таким 
+      образом строится построчная гистограмма
+    3. На полученной гистограмме находятся локальные минимумы и максимумы
+      - Если между двумя максимумами выполняется соотношение
+        var/mean*mean_global/var_global < minima_merge_tresh
+        var, mean - вариация и среднее в промежутке между двумя максимумами;
+        var_global, mean_global - вариация и среднее всей гистограмме;
+        то локальные минимумы в этом промежутке не берутся.
+    4. Локальные максимумы дополняются граничными линиями. Для каждого проме-
+      жутка между локальными максимумами в качестве порога выбирается значе-
+      ние ближайшего минимума, умноженное на коэффициент minima_coef.
+    
+    Keyword arguments:
+    img -- цветное или серое изображение
+    minima_coef -- Коэффициент услиления локального минимума.
+    conv_kern_size -- Размер светрочного окна (в процентах от высоты
+                               изображения) при сглаживании гистограммы.
+    minima_merge_tresh -- Порог отсеивания локальных минимумов (см п.3).
+    extremum_order -- Размер окна (в процентах от высоты изображения) при 
+                      поиске локальных экстремумов
+    
+    """
     
     gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     
@@ -76,7 +154,7 @@ def split_lines_hist(img, test = False):
     if test:
         show_hist(hist, np.arange(len(hist) + 1))
     
-    conv_kern_size = int(len(hist) * CONVOLUTION_KERNEL_SIZE)
+    conv_kern_size = int(len(hist) * conv_kern_size)
     conv_kern = np.ones(conv_kern_size)
     hist_sm = np.convolve(hist, conv_kern, 'same')
     hist_sm = hist_sm/hist_sm.max()
@@ -84,7 +162,7 @@ def split_lines_hist(img, test = False):
     if test:
         show_hist(hist_sm, np.arange(len(hist_sm) + 1))
     
-    order = int(len(hist_sm) * EXTREMUM_ORDER)
+    order = int(len(hist_sm) * extremum_order)
     
     minima = argrelextrema(hist_sm, np.less, order=order)[0]
     maxima = argrelextrema(hist_sm, np.greater, order=order)[0]
@@ -104,7 +182,7 @@ def split_lines_hist(img, test = False):
         var = hist_sm[maxima[i]:maxima[i + 1]].var()
         mean = hist_sm[maxima[i]:maxima[i + 1]].mean()
         coef = var/mean*mean_global/var_global
-        if coef < MERGE_TRESHOLD:
+        if coef < minima_merge_tresh:
             min_inside = np.where(np.logical_and(minima >= maxima[i],
                                                  minima <= maxima[i + 1]))[0]
             minima = np.delete(minima, min_inside)
@@ -126,11 +204,11 @@ def split_lines_hist(img, test = False):
                 
             th_cur = minima[np.where(np.logical_and(minima >= maxima[range_l],
                                                     minima <= maxima[range_u]))].min()
-            th[maxima[i]: maxima[i + 1]] = hist_sm[th_cur] * TRESHOLD_COEF
+            th[maxima[i]: maxima[i + 1]] = hist_sm[th_cur] * minima_coef
     else:
         hist_min = hist_sm.min()
         if hist_min:
-            th = hist_sm.min() * TRESHOLD_COEF
+            th = hist_sm.min() * minima_coef
         else:
             th = hist_sm.max() / 10
     
@@ -155,7 +233,6 @@ def split_symbols_list(gray, treshold, treshold_dark):
 
 
 def mask_hist(img, test=True):
-    TRESHOLD = 0.23
     TRESHOLD_X = 0.12
     DARK_TRESHOLD = 180
     
