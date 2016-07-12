@@ -10,11 +10,12 @@ from os import environ, system, path, listdir, makedirs
 import sys
 from argparse import ArgumentParser
 
-main_dir = path.dirname(path.dirname(__file__))
-if not main_dir in sys.path:
-    sys.path.append(main_dir)
-
 import cv2
+
+pricer_dir = path.dirname(path.dirname(__file__))
+if not pricer_dir in sys.path:
+    sys.path.append(pricer_dir)
+del pricer_dir
 
 from split_hist import split_lines_hist, crop_regions
 

@@ -21,7 +21,7 @@ if not main_dir in sys.path:
 from marking_tools.os_utils import show_hist
 
 
-DATASET_NAME = "names"
+DATASET_NAME = "names_lines"
 DATA_PATH = environ["BEORGDATAGEN"] + "/CData_full"
 DATASET_PATH = DATA_PATH + "/" + DATASET_NAME
 CLASSIFIER_NM1_PATH = environ["BEORGDATA"] + "/cv_trained_classifiers/trained_classifierNM1.xml"
@@ -38,7 +38,7 @@ def calc_variance(image, percent=0.1):
     hist, bins = np.histogram(image.ravel(), 100, (int(start_after), 255))
     hist = hist/hist.sum()
     
-    print(hist.var())
+    return hist.var()
     
     
 def adapt_tresh_mask(mask):
@@ -97,7 +97,8 @@ def lines_mask_circle(sobel, step, line_thickness, line_width,
     
 def detect_text_cv(img, test=False):
     MAX_W_H_RATIO = 1.5
-    IMG_H = 200
+    IMG_H = 100
+    MERGE_STEP_PIXELS = 20
     w = int(IMG_H*img.shape[1]/img.shape[0])
     img = cv2.resize(img, (w, IMG_H))
     
@@ -120,7 +121,6 @@ def detect_text_cv(img, test=False):
             x,y,w,h = cv2.boundingRect(regions[i])
             rects.append([x,y,w,h])
     
-    step = 20
     rects_merged = []
     if len(rects) > 0:
         rects_merged = [rects[0]]
@@ -128,10 +128,10 @@ def detect_text_cv(img, test=False):
             rect = rects[i]
             any_ = False
             for j in range(len(rects_merged)):
-                if abs(rect[0] - rects_merged[j][0]) < step and \
-                   abs(rect[1] - rects_merged[j][1]) < step and \
-                   abs(rect[2] - rects_merged[j][2]) < step and \
-                   abs(rect[3] - rects_merged[j][3]) < step:
+                if abs(rect[0] - rects_merged[j][0]) < MERGE_STEP_PIXELS and \
+                   abs(rect[1] - rects_merged[j][1]) < MERGE_STEP_PIXELS and \
+                   abs(rect[2] - rects_merged[j][2]) < MERGE_STEP_PIXELS and \
+                   abs(rect[3] - rects_merged[j][3]) < MERGE_STEP_PIXELS:
                        any_=True
                        rects_merged[j][0] = min(rect[0], rects_merged[j][0])
                        rects_merged[j][1] = min(rect[1], rects_merged[j][1])
@@ -286,8 +286,7 @@ if __name__ == "__main__":
         
         #kernel = np.ones((5,10),np.uint8)
         #img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-        
-        cv2.imshow("clahe", img)
+        #cv2.imshow("clahe", img)
         
         gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY) 
         mask = detect_text_cv(img)

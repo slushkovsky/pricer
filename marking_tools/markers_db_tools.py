@@ -42,10 +42,11 @@ class Symbol(Base):
     image = Column(String)
 
     def __repr__(self):
-        coords = (self.x, self.y, self.w, self.h)
+        coords = (self.x1, self.y1, self.x2, self.y2)
         return "<Symbol(added='%s', image='%s', label=%s coords ='%s')>" % (
                                 self.date_added, self.image, self.label,
                                 coords)
+        
         
 class SymbolRel(Base):
     __tablename__ = 'paths_rel'
@@ -59,10 +60,24 @@ class SymbolRel(Base):
     image = Column(String)
 
     def __repr__(self):
-        coords = (self.x, self.y, self.w, self.h)
+        coords = (self.x1, self.y1, self.x2, self.y2)
         return "<SymbolRel(added='%s', image='%s', label=%s coords ='%s')>" % (
                                 self.date_added, self.image, self.label,
                                 coords)
+        
+        
+class PointRel(Base):
+    __tablename__ = 'points'
+    id = Column(Integer, primary_key=True)
+    date_added = Column(DateTime, default=datetime.now())
+    image = Column(String)
+    x = Column(Float)
+    y = Column(Float)
+
+    def __repr__(self):
+        coords = (self.x, self.y)
+        return "<SymbolRel(added='%s', image='%s', coords ='%s')>" % (
+                                self.date_added, self.image, coords)
         
         
 def get_symbol_image(symbol_rel, image_directory):
