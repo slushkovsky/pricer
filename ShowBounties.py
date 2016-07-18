@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 def process_geom_file(data_path, file_name, out_path):
-	file_path = '/'.join([data_path, file_name])
+	file_path = path.join(data_path, file_name)
 	folder = path.dirname(file_path)
 
 	if(path.exists(out_path)):

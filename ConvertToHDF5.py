@@ -1,4 +1,4 @@
-from os import environ
+from os import environ, path
 import shutil
 
 import cv2
@@ -10,7 +10,7 @@ import h5py
 #########################
 
 def generateHDF5(data_path, file_name, out_name, image_size, n_chan = 3, dataset_data_name = 'data', dataset_label_name = 'label'):
-	file_path = '/'.join([data_path, file_name])
+	file_path = path.join(data_path, file_name)
 	infile = open(file_path, 'r')
 	num_lines = sum(1 for line in infile.readlines())
 	infile.seek(0)
@@ -23,7 +23,7 @@ def generateHDF5(data_path, file_name, out_name, image_size, n_chan = 3, dataset
 		for line in infile.readlines():
 			img_name, tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y = line.split()
 
-			img_path = '/'.join([data_path, img_name])
+			img_path = path.join(data_path, img_name)
 			img = cv2.imread(img_path)
 			size = img.shape
 			img = cv2.resize(img, image_size, interpolation = cv2.INTER_CUBIC)

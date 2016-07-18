@@ -105,12 +105,12 @@ def IncreaseDataPricer(repeats, data_path, rubl_file_name, kope_file_name, name_
 			return
 	makedirs(out_path)
 
-	rubl_file_path = '/'.join([data_path, rubl_file_name])
-	kope_file_path = '/'.join([data_path, kope_file_name])
-	name_file_path = '/'.join([data_path, name_file_name])
-	rubl_outfile_path = '/'.join([out_path, rubl_file_name])
-	kope_outfile_path = '/'.join([out_path, kope_file_name])
-	name_outfile_path = '/'.join([out_path, name_file_name])
+	rubl_file_path = path.join(data_path, rubl_file_name)
+	kope_file_path = path.join(data_path, kope_file_name)
+	name_file_path = path.join(data_path, name_file_name)
+	rubl_outfile_path = path.join(out_path, rubl_file_name)
+	kope_outfile_path = path.join(out_path, kope_file_name)
+	name_outfile_path = path.join(out_path, name_file_name)
 
 	rubl_infile = open(rubl_file_path, 'r')
 	kope_infile = open(kope_file_path, 'r')
@@ -137,7 +137,7 @@ def IncreaseDataPricer(repeats, data_path, rubl_file_name, kope_file_name, name_
 				print 'Local files contradict each other'
 				return -1
 			img_name = inpR[0]
-			img_path = '/'.join([data_path, img_name])
+			img_path = path.join(data_path, img_name)
 			img = cv2.imread(img_path)
 
 			img = Blur(15, img)
@@ -160,7 +160,7 @@ def IncreaseDataPricer(repeats, data_path, rubl_file_name, kope_file_name, name_
 			NameMatrix_i = PerspectiveMatrix(pr, NameMatrix_i, img)
 
 			new_img_name = img_name[0: len(img_name) - 4] + '_' + str(i) + '.jpg'
-			new_img_path = '/'.join([out_path, new_img_name])
+			new_img_path = path.join(out_path, new_img_name)
 			WriteMatrix(RublMatrix_i, new_img_name, rubl_outfile)
 			WriteMatrix(KopeMatrix_i, new_img_name, kope_outfile)
 			WriteMatrix(NameMatrix_i, new_img_name, name_outfile)
@@ -186,8 +186,8 @@ def IncreaseDataCords(repeats, data_path, file_name, out_path):
 			print 'Specify a different path'
 			return
 	makedirs(out_path)
-	file_path = '/'.join([data_path, file_name])
-	outfile_path = '/'.join([out_path, file_name])
+	file_path = path.join(data_path, file_name)
+	outfile_path = path.join(out_path, file_name)
 	infile = open(file_path, 'r')
 	outfile = open(outfile_path, 'w')
 	inp = infile.readline().split()
@@ -197,7 +197,7 @@ def IncreaseDataCords(repeats, data_path, file_name, out_path):
 		for i in range(repeats):
 			matrix_i = matrix
 			img_name = inp[0]
-			img_path = '/'.join([data_path, img_name])
+			img_path = path.join(data_path, img_name)
 			img = cv2.imread(img_path)
 
 			img = Blur(15, img)
@@ -211,7 +211,7 @@ def IncreaseDataCords(repeats, data_path, file_name, out_path):
 			matrix_i = PerspectiveMatrix(pr, matrix, img)
 
 			new_img_name = img_name[0: len(img_name) - 4] + '_' + str(i) + '.jpg'
-			new_img_path = '/'.join([out_path, new_img_name])
+			new_img_path = path.join(out_path, new_img_name)
 			WriteMatrix(matrix_i, new_img_name, outfile)
 			cv2.imwrite(new_img_path, img)
 		inp = infile.readline().split()
@@ -234,7 +234,7 @@ def IncreaseData(repeats, data_path, out_path):
 	jpg = filter(lambda x: x.endswith('.jpg'), files)
 	for img_name in jpg:
 		print img_name
-		img_path = '/'.join([data_path, img_name]) 
+		img_path = path.join(data_path, img_name) 
 		for i in range(repeats):
 			img = cv2.imread(img_path)
 			img = Blur(15, img)
@@ -244,7 +244,7 @@ def IncreaseData(repeats, data_path, out_path):
 			img, tr = TranslateImg((0.05, 0.05), img)
 			img, pr = PerspectiveImg(25, img)
 			new_img_name = img_name[0: len(img_name) - 4] + '_' + str(i) + '.jpg'
-			new_img_path = '/'.join([out_path, new_img_name])
+			new_img_path = path.join(out_path, new_img_name)
 			cv2.imwrite(new_img_path, img)
 
 if __name__ == '__main__':

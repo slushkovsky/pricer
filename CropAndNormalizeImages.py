@@ -16,7 +16,7 @@ def CropAndNormalize(data_path, local_file_name, out_path, resolution):
 	resolution_w = resolution[0]
 	resolution_h = resolution[1]
 
-	local_file_path = '/'.join([data_path, local_file_name])
+	local_file_path = path.join(data_path, local_file_name)
 	local_file = open(local_file_path, 'r')
 	inp = local_file.readline().split()
 
@@ -24,7 +24,7 @@ def CropAndNormalize(data_path, local_file_name, out_path, resolution):
 		img_name = inp[0]
 		point1, point2, point3, point4 = inp[1:3], inp[3:5], inp[5:7], inp[7:9]
 
-		img_path = '/'.join([data_path, img_name])
+		img_path = path.join(data_path, img_name)
 		print img_path
 		img = cv2.imread(img_path)
 		img_h, img_w, ch  = img.shape
@@ -36,7 +36,7 @@ def CropAndNormalize(data_path, local_file_name, out_path, resolution):
 
 		img = img[0:resolution_h + 1, 0:resolution_w + 1]
 
-		out_img_path = '/'.join([	out_path, img_name])
+		out_img_path = path.join(out_path, img_name)
 		cv2.imwrite(out_img_path ,img)
 
 		inp = local_file.readline().split()
