@@ -17,9 +17,13 @@ if not main_dir in sys.path:
 
 import numpy as np
 from scipy.signal import argrelextrema
+from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
 import cv2
 
 from marking_tools.os_utils import show_hist
+from utils.filters import monochrome_mask
+from otsu import otsu
 
 def extract_regions_from_hist(hist, treshold):
     """Выделение регионов по гистограмме и порогу
@@ -70,25 +74,245 @@ def crop_regions(parts, minima_merge_tresh = 10):
         if abs(part[1] - part[0]) > minima_merge_tresh:
             parts_merged.append(part)
     return parts_merged
+    
+    
+def extract_gradients(gray, mask):
+    binary = np.abs(cv2.Laplacian(gray, cv2.CV_64F))
+    binary = ((binary / binary.max())*255).astype(np.uint8)
+    
+    gray_mask = cv2.bitwise_and(gray, gray, mask=mask)
+    
+    ret, mask = cv2.threshold(gray_mask, 1,255, 
+                              cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    binary = cv2.bitwise_and(binary, binary, mask=mask)
+    
+    hist, bins = np.histogram(binary.ravel(), 255,  (1, 255))
+    #hist = hist.cumsum()
+    #hist = hist - hist.min()
+    #hist = hist/hist.max()
+    #hist = hist/float(binary.max())*255.0
+    show_hist(hist, bins)
+        
+    #for i in range(binary.shape[1]):
+    #    for j in range(binary.shape[0]):
+    #        binary[i,j] *= hist[binary[i,j]]
+    
+    #binary = binary.astype(np.uint8)
+    
+    cv2.imshow("binary", binary)
+    cv2.waitKey()
+    
+    return binary
+    
+    
+def otsu_iterations(color, noise_h=1.0, symbol_max_h=0.9):
+    gray = cv2.cvtColor(color,cv2.COLOR_BGR2GRAY)
+    hsv = cv2.cvtColor(color, cv2.COLOR_BGR2HSV_FULL)
+    v = hsv[:,:, 2]
+
+    v_mask_dark = np.full(gray.shape, 255, np.uint8)
+    v_mask_dark_full = np.full(gray.shape, 255, np.uint8)
+    v_ = v.copy()
+    t = 0
+    
+    for i in range(5):
+        t_cur = otsu(v_, True)
+        if t == t_cur:
+            break
+        t = t_cur
+        
+        ret, v_mask_cur = cv2.threshold(v_, t, 255, cv2.THRESH_BINARY)
+        dark_cols = 1.0 - (v_mask_cur.sum(axis=0).astype(np.float)/255/img.shape[0])
+        
+        v_mask_cur[:, dark_cols >= symbol_max_h] = 255
+        v_mask_dark = cv2.bitwise_and(v_mask_dark, v_mask_cur)
+
+        cur_ful_mask = np.full(gray.shape, 255, np.uint8)
+        cur_ful_mask[:, dark_cols >= noise_h] = 0
+        cur_ful_mask[:, v_mask_dark_full[0] == 0] = 255
+
+        v_mask_dark_full[:, dark_cols >= noise_h] = 0
+        v_ = cv2.bitwise_and(v, v, mask=255 - v_mask_dark_full)
+
+        coverage = cur_ful_mask[:, dark_cols > 0.9].shape[1]/img.shape[1]
+
+        #cv2.imshow("cur_ful_mask",cur_ful_mask)
+        #cv2.imshow("v_mask_dark_full", v_mask_dark_full)
+        #cv2.imshow("v_mask_dark", v_mask_dark)
+        #cv2.imshow("v_", v_)
+        #cv2.waitKey()
+
+        if coverage > 0.1:
+            v_mask_dark_full[:, dark_cols > 0.9] = 0
+        else:
+            break
+        
+    v_mask = np.full(gray.shape, 255, np.uint8)
+    v_mask_full = np.full(gray.shape, 255, np.uint8)
+    t = 0
+    for i in range(2):
+        v_ = cv2.bitwise_and(v, v, mask=v_mask_cur)
+        
+        t_cur = otsu(v_, True)
+        
+        if t_cur == t:
+            break
+        
+        t = t_cur
+        ret, v_mask_cur = cv2.threshold(v_, t, 255, cv2.THRESH_BINARY)
+        
+        dark_cols = 1.0 - (v_mask_cur.sum(axis=0).astype(np.float)/255/img.shape[0])
+        
+        v_mask_cur[:, dark_cols > symbol_max_h] = 255
+        v_mask_full[:, np.logical_and(dark_cols <= symbol_max_h,
+                                      dark_cols > 0.05)] = 0
+        v_mask = cv2.bitwise_and(v_mask, v_mask_cur)
+        
+        #cv2.imshow("v_mask_full",v_mask_full)
+        #cv2.imshow("v_mask_cur", v_mask_cur)
+        #cv2.imshow("v_", v_)
+        #cv2.waitKey()
+        
+    cv2.imshow("v_mask_dark", v_mask_dark)
+    cv2.imshow("v_mask", v_mask)
+    cv2.waitKey()
+    return v_mask, v_mask_dark
   
     
-def get_begin_end_text_line(img, h_crop_perc=0.3,
+def get_begin_end_text_line(img, h_crop_perc=0.0,
                             treshold_coeff=0.3,
                             conv_size = 0.1,
                             test=False):
+    BIG_MAXIMA_ORDER = 0.05
+    
     img_h = img.shape[0]
     line_croped = img[int(img_h*h_crop_perc):int(img_h*(1-h_crop_perc)),:]
-
+    
     gray = cv2.cvtColor(line_croped,cv2.COLOR_BGR2GRAY)
-    binary = np.abs(cv2.Laplacian(gray, cv2.CV_64F))
+    cv2.imshow("gray", gray)
+    
+    hsv = cv2.cvtColor(line_croped, cv2.COLOR_BGR2HSV_FULL)
+    v = hsv[:,:, 2]
+
+    steps = 40
+    step = gray.shape[1] // steps
+    mask = np.full(gray.shape, 255, np.uint8)
+    mask_single = np.full(gray.shape, 255, np.uint8)
+    mask_two = np.full(gray.shape, 255, np.uint8)
+    
+    x_val = np.zeros(steps + 2)
+    y_val = np.zeros(steps + 2)
+    
+    for i in range(steps):
+        x = step*i
+        
+        part = gray[:, x:x+step]
+        
+        t = otsu(part)
+        ret, mask_1 = cv2.threshold(part, t, 255, cv2.THRESH_BINARY_INV)
+        
+        part_2 = cv2.bitwise_and(part, part, mask=mask_1)
+        
+        t2 = otsu(part_2, True)
+        mask_2 = np.logical_or(part_2 != 0, part_2 < t2).astype(np.uint8) * 255
+        
+        print(t, t2)
+        
+        mask_ = (np.logical_and(part < t, part < t2)).astype(np.uint8) * 255
+        mask[:, x:x+step] = mask_
+        mask_single[:, x:x+step] = (part > t).astype(np.uint8) * 255
+        mask_two[:, x:x+step] = mask_2
+ 
+        x_val[i + 1] = x + step/2
+        y_val[i + 1] = t
+        
+    
+    x_val[0] = 0
+    y_val[0] = y_val[1]
+    x_val[-1] = gray.shape[1]
+    y_val[-1] = y_val[-2]
+
+    f = interp1d(x_val, y_val, kind='slinear')
+    x_new = np.arange(gray.shape[1])
+    
+    plt.plot(x_val, y_val, 'o', x_new, f(x_new), '-')
+    plt.show()
+        
+    cv2.imshow("mask", mask)
+    cv2.imshow("mask_single", mask_single)
+    cv2.imshow("mask_two", mask_two)
+    cv2.waitKey()    
+    
+    return []
+    #kernel = np.ones((gray.shape[0] // 10, gray.shape[0] // 10),np.uint8)
+    #v_mask = cv2.dilate(v_mask, kernel, iterations = 1)
+    
+    v_mask_inv = 255 - v_mask
+    
+    cv2.imshow("v_mask", v_mask)
+    cv2.imshow("v_mask_inv", v_mask_inv)
+    
+    binary_spec = extract_gradients(gray, v_mask)
+    binary_non_spec = extract_gradients(gray, v_mask_inv)
+    
+    binary = cv2.bitwise_or(binary_spec, binary_non_spec)
+    
+    #cv2.imshow("binary", binary)
+    #cv2.waitKey()
 
     hist = binary.sum(axis=0)
+    #show_hist(hist, np.arange(len(hist) + 1))
+    return extract_regions_from_hist(hist, hist.mean()*1.5)
+    
+    return []
+    
+    hist = hist/hist.sum()
+    var_hist = np.array(())
+    
+    step = (hist.max() - hist.min()) / 100
+    for i in np.arange(hist.min(), hist.max(), step):
+        var_hist = np.append(var_hist, hist[hist > i].std())
+        
+    show_hist(var_hist, np.arange(len(var_hist) + 1))
+    return []
+    
+    hist_3 = np.convolve(hist, np.ones(len(hist)//50), 'same')
+    show_hist(hist_3, np.arange(len(hist_3) + 1))
+    
+
+    minima = argrelextrema(hist_3, np.less, order=int(len(hist_3)*BIG_MAXIMA_ORDER))[0]
+    print(hist_3[minima])
+    
+    max_var = 0
+    min_ = minima[0]
+    for cur_minima in minima:
+        step = len(hist_3) // 50
+        var = hist_3[cur_minima - step: cur_minima + step].var()
+        if var > max_var:
+            max_var = var
+            min_ = cur_minima
+    
+    min_ = hist_3[min_]
+    print(min_)
+    return extract_regions_from_hist(hist_3, min_)
+    
 
     hist_2, bins = np.histogram(hist, 200)
-    hist_2 = np.convolve(hist_2, np.ones(20), 'same')
     
+    hist_2 = np.convolve(hist_2, np.ones(40), 'same')
+    
+    if test:
+        show_hist(hist_2, bins)
+        
+    # нахождение последнего большого локального максимума
+    # соответсвующего тексту
+    maxima = argrelextrema(hist_2, np.greater,
+                           order=int(len(hist_2)*BIG_MAXIMA_ORDER))[0]
+    print(bins[maxima])
+    return []                       
+                           
     minima = argrelextrema(hist_2, np.less, order=1)[0]
-    maxima = argrelextrema(hist_2, np.greater, order=len(hist_2)//4)[0]
+   
 
     sum_hist = np.cumsum(hist_2/hist_2.sum())
     
@@ -98,7 +322,7 @@ def get_begin_end_text_line(img, h_crop_perc=0.3,
         print("minima", bins[minima])
         print("maxima", bins[maxima])
         #show_hist(sum_hist, bins)
-        show_hist(hist_2, bins)
+        
     
     treshold = 0
     print(len(maxima))
