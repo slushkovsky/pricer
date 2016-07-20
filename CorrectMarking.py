@@ -13,6 +13,8 @@ def correctPoints(rect, data_path, image_name, output_file, suf = ''):
 		image = cv2.imread(image_path)
 		for i in range(len(rect)):
 			cv2.circle(image, rect[i], 5, (0, 255, 0), -1)
+			if (i == cur):
+				cv2.circle(image, rect[i], 5, (180, 255, 180), -1)
 			cv2.line(image, rect[i], rect[(i + 1) % len(rect)], (0, 255, 0))
 		cv2.imshow(window_name, image)
 		k = cv2.waitKey(100) & 0xFF
@@ -49,8 +51,8 @@ def correctPoints(rect, data_path, image_name, output_file, suf = ''):
 if __name__ == '__main__':
 	sharps = '#################################'
 	TIP = sharps + '\nCall this script whis parametr new to clear output file\nUsage:\nUp/Down/Left/Right buttons to change current point position\n1/2/3/4 to change current point\ns to skip this image\nEnter to save image and go to the next\np to print current coordinates\nEscape to exit\n' + sharps
-	OUT_FILE_NAME = os.environ['BEORGDATA'] + '/ToMark/rubli_corrected.txt'
-	IN_FILE_NAME = os.environ['BEORGDATA'] + '/ToMark/rubli.txt'
+	OUT_FILE_NAME = os.environ['BEORGDATA'] + '/ToMark/kopeiki_corrected.txt'
+	IN_FILE_NAME = os.environ['BEORGDATA'] + '/ToMark/kopeiki.txt'
 	DATA_PATH = os.environ['BEORGDATA'] + '/ToMark'
 
 	in_file = open(IN_FILE_NAME, 'r')
