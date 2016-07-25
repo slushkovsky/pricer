@@ -21,7 +21,7 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 import cv2
 
-from marking_tools.os_utils import show_hist
+from utils.os_utils import show_hist
 from utils.filters import monochrome_mask
 from otsu import otsu
 

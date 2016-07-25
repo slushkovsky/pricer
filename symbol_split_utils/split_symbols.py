@@ -18,14 +18,14 @@ main_dir = path.dirname(path.dirname(__file__))
 if not main_dir in sys.path:
     sys.path.append(main_dir)
 
-from marking_tools.os_utils import show_hist
+from utils.os_utils import show_hist
 
 
 DATASET_NAME = "names_lines"
 DATA_PATH = environ["BEORGDATAGEN"] + "/CData_full"
 DATASET_PATH = DATA_PATH + "/" + DATASET_NAME
-CLASSIFIER_NM1_PATH = environ["BEORGDATA"] + "/cv_trained_classifiers/trained_classifierNM1.xml"
-CLASSIFIER_NM2_PATH = environ["BEORGDATA"] + "/cv_trained_classifiers/trained_classifierNM2.xml"
+CLASSIFIER_NM1_PATH = environ["BEORGDATAGEN"] + "/cv_trained_classifiers/trained_classifierNM1.xml"
+CLASSIFIER_NM2_PATH = environ["BEORGDATAGEN"] + "/cv_trained_classifiers/trained_classifierNM2.xml"
 
 def calc_variance(image, percent=0.1):
     range_ = (20.0, 255.0)
