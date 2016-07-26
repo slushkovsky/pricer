@@ -6,34 +6,87 @@ Created on Sat Jun 18 15:18:34 2016
 @author: chernov
 """
 
-import numpy as np
-import cv2
 import copy
+
+import sys
+from os import path
+
+pricer_dir = path.dirname(path.dirname(__file__))
+if not pricer_dir in sys.path:
+    sys.path.append(pricer_dir)
+del pricer_dir
+
+import cv2
+import numpy as np
+
+from utils.os_utils import show_hist
+import symbol_split_utils.split_hist as split_utils
 
 IMAGE_SIZE = (576, 1024)
 
+def filter_dark_gray(color, test=False):
+    
+    hsv = cv2.cvtColor(color,cv2.COLOR_BGR2HSV)
+    
+    s_norm = cv2.normalize(hsv[:,:,1], None, alpha=0.0, beta=1.0,
+                           norm_type=cv2.NORM_MINMAX,
+                           dtype = cv2.CV_64F)
+    gray_norm = cv2.normalize(hsv[:,:,2], None, alpha=0.0, beta=1.0,
+                              norm_type=cv2.NORM_MINMAX,
+                              dtype = cv2.CV_64F)
+    
+    if test:
+        cv2.imshow("1.0 - gray_norm", 1.0 - gray_norm)
+        cv2.imshow("1.0 - s_norm", 1.0 - s_norm)
+    
+    mask_dark_gray = ((1.0 - gray_norm)**2) * (1.0 - s_norm)
+    mask_dark_gray = cv2.normalize(mask_dark_gray, None, alpha=0, beta=255,
+                                   norm_type=cv2.NORM_MINMAX,
+                                   dtype = cv2.CV_8U)
+    
+    if test:
+        cv2.imshow("mask_dark_gray", mask_dark_gray)
+    return mask_dark_gray
+
+    
 def mask_full_hor_lines(img, test=False):
     LINE_THICKNESS = 40
     Y_DISP_PIXELS = 50
     DISP_STEPS = 20
     SOBEL_KERNEL_SIZE = 3
-    GRADIENT_MIN = 130
+    GRADIENT_MIN = 0.5
     
     gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-    sobelx = cv2.Sobel(gray, cv2.CV_8U, 1, 0, ksize=SOBEL_KERNEL_SIZE)
+    sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=SOBEL_KERNEL_SIZE)
+    sobelx = np.abs(sobelx)
+    sobelx = cv2.normalize(sobelx, None, alpha=0.0, beta=1.0, 
+                           norm_type=cv2.NORM_MINMAX, dtype = cv2.CV_64F)
     if test:
-        cv2.imshow('mask_full_hor_lines sobely', sobelx)
+        cv2.imshow('mask_full_hor_lines sobelx', sobelx)
+        
+    #dark_gray_mask = filter_dark_gray(img, test)
+    #kernel = np.ones((5,5),np.uint8)
+    #dil = cv2.dilate(dark_gray_mask, kernel, iterations=1)
+    #sobel_gray = cv2.normalize( sobelx * dil, None, alpha=0.0, beta=1.0, 
+    #                           norm_type=cv2.NORM_MINMAX, dtype = cv2.CV_64F)
+    #cv2.imshow("sobel_gray", sobel_gray)
     
+    #hist = sobelx.sum(axis=1)
+    #hist = hist/hist.max()
+    #if test:
+    #    hist_3 = np.convolve(hist, np.ones(100), 'same')
+    #    show_hist(hist_3, np.arange(len(hist_3) + 1))
+        
     full_mask = np.zeros(gray.shape, np.uint8)
     for y in range(0, sobelx.shape[0], LINE_THICKNESS):
-     for y_left in range(y - Y_DISP_PIXELS//2,
-                         y + Y_DISP_PIXELS//2,
-                         Y_DISP_PIXELS//(DISP_STEPS//2)):
-         mask = np.zeros(gray.shape, np.uint8)
-         cv2.line(mask, (0, y), (sobelx.shape[1], y_left), 255, LINE_THICKNESS)
-         masked = cv2.bitwise_and(sobelx, sobelx, mask=mask)
-         if(not (masked > GRADIENT_MIN).sum() > img.shape[1]*0.05):
-             full_mask = cv2.bitwise_or(full_mask, mask)        
+       for y_left in range(y - Y_DISP_PIXELS//2,
+                           y + Y_DISP_PIXELS//2,
+                           Y_DISP_PIXELS//(DISP_STEPS//2)):
+           mask = np.zeros(gray.shape, np.uint8)
+           cv2.line(mask, (0, y), (sobelx.shape[1], y_left), 255, LINE_THICKNESS)
+           masked = cv2.bitwise_and(sobelx, sobelx, mask=mask)
+           if(not (masked > GRADIENT_MIN).sum() > img.shape[1]*0.05):
+               full_mask = cv2.bitwise_or(full_mask, mask)        
     full_mask = 255 - full_mask
     if test:
         cv2.imshow("mask_full_hor_lines mask", full_mask)  

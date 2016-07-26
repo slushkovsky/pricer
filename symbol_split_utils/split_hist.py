@@ -14,6 +14,8 @@ from argparse import ArgumentParser
 main_dir = path.dirname(path.dirname(__file__))
 if not main_dir in sys.path:
     sys.path.append(main_dir)
+if not path.dirname(__file__) in sys.path:
+    sys.path.append(path.dirname(__file__))
 
 import numpy as np
 from scipy.signal import argrelextrema
@@ -22,8 +24,7 @@ import matplotlib.pyplot as plt
 import cv2
 
 from utils.os_utils import show_hist
-from utils.filters import monochrome_mask
-from otsu import otsu
+import otsu
 
 def extract_regions_from_hist(hist, treshold):
     """Выделение регионов по гистограмме и порогу
@@ -116,7 +117,7 @@ def otsu_iterations(color, noise_h=1.0, symbol_max_h=0.9):
     t = 0
     
     for i in range(5):
-        t_cur = otsu(v_, True)
+        t_cur = otsu.otsu(v_, True)
         if t == t_cur:
             break
         t = t_cur
@@ -153,7 +154,7 @@ def otsu_iterations(color, noise_h=1.0, symbol_max_h=0.9):
     for i in range(2):
         v_ = cv2.bitwise_and(v, v, mask=v_mask_cur)
         
-        t_cur = otsu(v_, True)
+        t_cur = otsu.otsu(v_, True)
         
         if t_cur == t:
             break
@@ -208,12 +209,12 @@ def get_begin_end_text_line(img, h_crop_perc=0.0,
         
         part = gray[:, x:x+step]
         
-        t = otsu(part)
+        t = otsu.otsu(part)
         ret, mask_1 = cv2.threshold(part, t, 255, cv2.THRESH_BINARY_INV)
         
         part_2 = cv2.bitwise_and(part, part, mask=mask_1)
         
-        t2 = otsu(part_2, True)
+        t2 = otsu.otsu(part_2, True)
         mask_2 = np.logical_or(part_2 != 0, part_2 < t2).astype(np.uint8) * 255
         
         print(t, t2)
