@@ -342,10 +342,13 @@ def flush_db(image_directory, dataset_name, session=None, normalise=False):
             cv2.imwrite(symbol_out_path, images[i])
             
             
-def flush_db_negative(image_directory, dataset_name, width=0.3,
+def flush_db_negative(image_directory, dataset_name, width=0.3, db_name=None,
                       session=None, normalise=False):
-    session = create_session_if_not(dataset_name, session)
-    out_dir = image_directory + "/%s_negative"%(dataset_name)
+    if not db_name:
+        db_name = dataset_name
+    session = create_session_if_not(db_name, session)
+    
+    out_dir = image_directory + "/%s"%(dataset_name)
     if(path.exists(out_dir)):
         shutil.rmtree(out_dir)
     makedirs(out_dir)
@@ -379,10 +382,12 @@ def flush_db_negative(image_directory, dataset_name, width=0.3,
                 cv2.imwrite(symbol_out_path, images[j])
                 
 
-def flush_db_dupl(image_directory, dataset_name,
+def flush_db_dupl(image_directory, dataset_name, db_name=None,
                   session=None, normalise=False):
-    session = create_session_if_not(dataset_name, session)
-    out_dir = image_directory + "/%s_negative"%(dataset_name)
+    if not db_name:
+        db_name = dataset_name
+    session = create_session_if_not(db_name, session)
+    out_dir = image_directory + "/%s"%(dataset_name)
     if(path.exists(out_dir)):
         shutil.rmtree(out_dir)
     makedirs(out_dir)

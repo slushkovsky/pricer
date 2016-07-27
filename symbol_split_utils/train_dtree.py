@@ -177,7 +177,8 @@ else:
 
 if not path.exists(DATASET_NEGATIVE_PATH):
     print("%s not found, start croping"%(DATASET_NEGATIVE_PATH))
-    flush_db_dupl(DATA_PATH, DATASET_NEGATIVE_NAME, normalise=True)
+    flush_db_dupl(DATA_PATH, DATASET_NEGATIVE_NAME,
+                  db_name=DATASET_NAME, normalise=False)
     print("croping done")
 else:
     print("%s found, skip croping. To force restart delete this folder"
