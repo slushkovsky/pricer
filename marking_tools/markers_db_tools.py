@@ -30,6 +30,15 @@ from utils.os_utils import show_hist
 
 Base = declarative_base()
 
+class ImageType(Base):
+    __tablename__ = 'pricer_types'
+    date_added = Column(DateTime, default=datetime.now())
+    label = Column(String)
+    image = Column(String, primary_key=True)
+    def __repr__(self):
+        return "<Symbol(added='%s', image='%s', label=%s>" % (
+                                self.date_added, self.image, self.label)
+
 class Symbol(Base):
     __tablename__ = 'paths'
     id = Column(Integer, primary_key=True)

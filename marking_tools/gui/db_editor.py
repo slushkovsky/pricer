@@ -19,9 +19,77 @@ tools_dir = path.dirname(path.dirname(path.realpath(__file__)))
 if not tools_dir in sys.path:
     sys.path.append(tools_dir)
 del tools_dir
-    
-from markers_db_tools import SymbolRel, PointRel
 
+import markers_db_tools
+
+ImageType = markers_db_tools.ImageType
+SymbolRel = markers_db_tools.SymbolRel
+PointRel = markers_db_tools.PointRel
+
+class DbEditorImageType():
+    """ Gui интерфейс для разметки типа изображений
+    
+    Управление:
+       q - отметить ценник с контрастным фоном
+       w - отметить ценник с неконтрастным фоном
+       e - следующее изображение
+       r - предыдущее изображение
+    """
+    
+    def __init__(self, data_path, session, 
+                 resize_size=None):
+        self.data_path = data_path
+        self.session = session
+        self.image = None
+        self.image_path = None
+        self.resize_size = resize_size
+        self.i = 0
+        
+    def reload_image(self):
+        image_copy = copy.copy(self.image)
+        types = self.session.query(ImageType) \
+                     .filter(ImageType.image==self.image_path)
+        for type_ in types:
+            cv2.putText(image_copy, type_.label,
+                        (0, image_copy.shape[0]//2),
+                        cv2.FONT_HERSHEY_SCRIPT_COMPLEX, 4,
+                        (0, 0, 255), 2, cv2.LINE_AA)
+        cv2.imshow("image", image_copy)
+        
+    def update_label(self, label):
+        type_ = ImageType(label=label, image=self.image_path)
+        self.session.merge(type_)
+        self.session.commit()
+        self.reload_image()
+    
+    def start_marking(self):
+        cv2.namedWindow("image")
+        
+        files = [f for f in listdir(self.data_path) if f.endswith('.jpg')]
+        while self.i < len(files):
+            self.image_path = files[self.i]
+            self.image = cv2.imread(path.join(self.data_path, files[self.i]))
+            if self.resize_size:
+                self.image = cv2.resize(self.image, self.resize_size,
+                                        cv2.INTER_CUBIC)
+            self.reload_image()
+            k = cv2.waitKey() 
+            if k & 0xFF == 27:
+                cv2.destroyAllWindows()
+                break
+            elif k == ord('q') or  k == ord('Q'):
+                self.update_label("contrast")
+            elif k == ord('w') or  k == ord('W'):
+                self.update_label("nocontrast")
+            elif k == ord('e') or  k == ord('E'):
+                self.i += 1
+            elif k == ord('r') or  k == ord('R'):
+                self.i = max(0, self.i - 1)
+                
+                    
+        cv2.destroyAllWindows()
+
+    
 class DbEditorPoints():
     def __init__(self, data_path, session, 
                  resize_size=None, remove_error=0.01):
