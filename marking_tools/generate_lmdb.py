@@ -35,6 +35,6 @@ if __name__ == '__main__':
     engine = create_engine(db_path)
     Base.metadata.create_all(engine)
     session = (sessionmaker(bind=engine))()
-    generate_lmdb(data_dir, session, 
-                  dataset_name, show_hists=False,
+    generate_lmdb(data_dir, session=session, 
+                  dataset_name=dataset_name, show_hists=False,
                   test=False)

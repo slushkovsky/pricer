@@ -18,14 +18,14 @@ main_dir = path.dirname(path.dirname(__file__))
 if not main_dir in sys.path:
     sys.path.append(main_dir)
 
-from marking_tools.os_utils import show_hist
+from utils.os_utils import show_hist
 
 
 DATASET_NAME = "names_lines"
 DATA_PATH = environ["BEORGDATAGEN"] + "/CData_full"
 DATASET_PATH = DATA_PATH + "/" + DATASET_NAME
-CLASSIFIER_NM1_PATH = environ["BEORGDATA"] + "/cv_trained_classifiers/trained_classifierNM1.xml"
-CLASSIFIER_NM2_PATH = environ["BEORGDATA"] + "/cv_trained_classifiers/trained_classifierNM2.xml"
+CLASSIFIER_NM1_PATH = environ["BEORGDATAGEN"] + "/cv_trained_classifiers/trained_classifierNM1.xml"
+CLASSIFIER_NM2_PATH = environ["BEORGDATAGEN"] + "/cv_trained_classifiers/trained_classifierNM2.xml"
 
 def calc_variance(image, percent=0.1):
     range_ = (20.0, 255.0)
@@ -93,14 +93,16 @@ def lines_mask_circle(sobel, step, line_thickness, line_width,
                     full_mask = cv2.bitwise_or(full_mask, mask)       
     full_mask = 255 - full_mask
     return full_mask
-    
+
     
 def detect_text_cv(img, test=False):
     MAX_W_H_RATIO = 1.5
     IMG_H = 100
     MERGE_STEP_PIXELS = 20
     w = int(IMG_H*img.shape[1]/img.shape[0])
+    scale = np.array(img.shape)
     img = cv2.resize(img, (w, IMG_H))
+    scale = scale/np.array(img.shape)
     
     channels = cv2.text.computeNMChannels(img)
 
@@ -108,14 +110,14 @@ def detect_text_cv(img, test=False):
     for channel in channels:
         erc1 = cv2.text.loadClassifierNM1(CLASSIFIER_NM1_PATH)
         er1 = cv2.text.createERFilterNM1(erc1,
-                                         16,
+                                         20,
                                          0.001,
-                                         0.99,
-                                         0.2,
-                                         False,
-                                         0.9)
+                                         0.05,
+                                         0.8,
+                                         True,
+                                         0.4)
         erc2 = cv2.text.loadClassifierNM2(CLASSIFIER_NM2_PATH)
-        er2 = cv2.text.createERFilterNM2(erc2,0.95)
+        er2 = cv2.text.createERFilterNM2(erc2,0.5)
         regions = cv2.text.detectRegions(channel,er1, er2)
         for i in range(len(regions)):
             x,y,w,h = cv2.boundingRect(regions[i])
@@ -148,6 +150,27 @@ def detect_text_cv(img, test=False):
                 rects_buf.append(rect)
         rects_merged = rects_buf
         
+        rects_bad = []
+        rects_buf = []
+        for i in range(len(rects_merged)):
+            contains = False
+            for j in range(len(rects_merged)):
+                rect_i = rects_merged[i]
+                rect_j = rects_merged[j]
+                if(rect_i != rect_j and
+                   rect_i[0] >= rect_j[0] and
+                   rect_i[1] >= rect_j[1] and
+                   rect_i[0] - rect_j[0] + rect_i[2] <= rect_j[2] and
+                   rect_i[1] - rect_j[1] + rect_i[3] <= rect_j[3]):
+                    contains = True
+                    break
+            if not contains:
+                rects_buf.append(rect_i)
+            else:
+                rects_bad.append(rect_i)
+                
+        rects_merged = rects_buf
+        
         hw_ratios = np.zeros(len(rects_merged))
         widths = np.zeros(len(rects_merged))
         heights = np.zeros(len(rects_merged))
@@ -156,27 +179,34 @@ def detect_text_cv(img, test=False):
             hw_ratios[i] = rect[3]/rect[2]
             widths[i] = rect[2]
             heights[i] = rect[3]
-
-        hist, bins = np.histogram(heights*widths, 20)
-        show_hist(hist, bins)
         
         if test:  
             hist, bins = np.histogram(hw_ratios, 20)
             hist1, bins1 = np.histogram(widths, 20)
             hist2, bins2 = np.histogram(heights, 20)
+            print("hw")
             show_hist(hist, bins)
+            print("w")
             show_hist(hist1, bins1)
+            print("h")
             show_hist(hist2, bins2)
+            hist, bins = np.histogram(heights*widths, 20)
+            print("area")
+            show_hist(hist, bins)
+            
+    for i in range(len(rects_bad)):
+        rects_bad[i][0] = int(rects_bad[i][0] * scale[1])
+        rects_bad[i][2] = int(rects_bad[i][2] * scale[1])
+        rects_bad[i][1] = int(rects_bad[i][1] * scale[0])
+        rects_bad[i][3] = int(rects_bad[i][3] * scale[0])
     
-    vis = copy.copy(img)        
-    for rect in rects_merged:
-        cv2.rectangle(vis, 
-                      (rect[0], rect[1]),
-                      (rect[0] + rect[2],
-                       rect[1] + rect[3]),
-                      (0, 0, 255),
-                      1)
-    cv2.imshow("vis", vis)
+    for i in range(len(rects_merged)):
+        rects_merged[i][0] = int(rects_merged[i][0] * scale[1])
+        rects_merged[i][2] = int(rects_merged[i][2] * scale[1])
+        rects_merged[i][1] = int(rects_merged[i][1] * scale[0])
+        rects_merged[i][3] = int(rects_merged[i][3] * scale[0])
+        
+    return rects_merged, rects_bad
     
     
 def process_image(img, test=False):
@@ -260,36 +290,61 @@ if __name__ == "__main__":
         system("python3 ../marking_tools/crop_pricers.py")
         print("croping done")
 
+    names_path = path.join(DATA_PATH, "names")
+    if not path.exists(names_path):
+        print("%s not found, start croping"%(names_path))
+        system("python3 ../marking_tools/crop_pricer_fields.py")
+        print("croping done")
+    
     if not path.exists(DATASET_PATH):
         print("%s not found, start croping"%(DATASET_PATH))
-        system("python3 ../marking_tools/crop_pricer_fields.py")
+        system("python3 %s"%(path.join(path.dirname(__file__),
+                                       "extract_text_lines.py")))
         print("croping done")
     else:
         print("%s found, skip croping. To force restart delete this folder"
               %(DATASET_PATH))
-    
+        
     i = 0
     for image_name in listdir(DATASET_PATH):
         if i < 0:
             i += 1
             continue
-        
         image_path = path.join(DATASET_PATH, image_name)
         print(image_path)
         img = cv2.imread(image_path)
         
-        #img = cv2.bilateralFilter(img,12, 100, 75)
-        clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8,8))
-        
-        for i in range(img.shape[2]):
-           img[:,:,i] = clahe.apply(img[:,:,i])
+        #clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(img.shape[1]//200,
+        #                                                     img.shape[0]//20))
+        #for i in range(img.shape[2]):
+        #   img[:,:,i] = clahe.apply(img[:,:,i])
         
         #kernel = np.ones((5,10),np.uint8)
         #img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
         #cv2.imshow("clahe", img)
         
-        gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY) 
-        mask = detect_text_cv(img)
+        gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+        rects, rects_inside = detect_text_cv(img)
+        
+        vis = copy.copy(img)   
+        for rect in rects:
+            cv2.rectangle(vis, (rect[0], rect[1]),
+                          (rect[0] + rect[2], rect[1] + rect[3]),
+                          (0, 0, 255), 2)
+        for rect in rects_inside:
+            cv2.rectangle(vis, (rect[0], rect[1]),
+                          (rect[0] + rect[2], rect[1] + rect[3]),
+                          (0, 255, 255), 1)
+        cv2.imshow("vis", vis)
+            
+
+        
+        
+        #for rect in rects:
+        #    cv2.imshow("symbol", img[rect[1]: rect[1] + rect[3],
+        #                             rect[0]: rect[0] + rect[2]])
+        #    cv2.waitKey()
+        
         k = cv2.waitKey() & 0xFF
         if k == 27:
             break
