@@ -51,16 +51,18 @@ if __name__ == '__main__':
             imgs = [path.basename(args.path)]
             folder = path.dirname(path.realpath(args.path))
         
+        test = False
+        imgs = ["75.jpg", "67.jpg", "69.jpg"]; test=True
         for img_name in imgs:
             img_path = path.join(folder,img_name)
             print(img_path)
             
             img = cv2.imread(img_path)
-            
+                
             regions = crop_regions(split_lines_hist(img), img.shape[0]*0.15)
             for region in regions:
                 line = img[region[0]:region[1], :]
-                regions_x = get_begin_end_text_line(line, test=True)
+                regions_x = get_begin_end_text_line(line, test=test)
                 cv2.rectangle(img, (0,region[0]), 
                               (img.shape[1],region[1]), (0,0,255), 3)
                 for region_x in regions_x:
