@@ -6,7 +6,8 @@ Created on Wed Jul  6 23:54:39 2016
 @author: chernov
 """
 
-from os import environ, listdir, path, system
+from argparse import ArgumentParser
+from os import environ, listdir, path, system, makedirs
 import math
 import copy
 import sys
@@ -21,7 +22,7 @@ if not main_dir in sys.path:
 from utils.os_utils import show_hist
 
 
-DATASET_NAME = "names_lines"
+DATASET_NAME = "rubli"
 DATA_PATH = environ["BEORGDATAGEN"] + "/CData_full"
 DATASET_PATH = DATA_PATH + "/" + DATASET_NAME
 CLASSIFIER_NM1_PATH = environ["BEORGDATAGEN"] + "/cv_trained_classifiers/trained_classifierNM1.xml"
@@ -110,9 +111,9 @@ def detect_text_cv(img, test=False):
     for channel in channels:
         erc1 = cv2.text.loadClassifierNM1(CLASSIFIER_NM1_PATH)
         er1 = cv2.text.createERFilterNM1(erc1,
-                                         20,
-                                         0.001,
+                                         1,
                                          0.05,
+                                         0.95,
                                          0.8,
                                          True,
                                          0.4)
@@ -124,6 +125,7 @@ def detect_text_cv(img, test=False):
             rects.append([x,y,w,h])
     
     rects_merged = []
+    rects_bad = []
     if len(rects) > 0:
         rects_merged = [rects[0]]
         for i in range(len(rects)):
@@ -150,7 +152,6 @@ def detect_text_cv(img, test=False):
                 rects_buf.append(rect)
         rects_merged = rects_buf
         
-        rects_bad = []
         rects_buf = []
         for i in range(len(rects_merged)):
             contains = False
@@ -210,31 +211,24 @@ def detect_text_cv(img, test=False):
     
     
 def process_image(img, test=False):
+    global idx
+    MIN_H_MASK = 0.15
+    MIN_SYMB_W = 0.01
+    MIN_SYMB_H = 0.4
+    
     gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     
-    hist, bins = np.histogram(gray.ravel(), 60)
-    hist = hist/hist.sum()
-    show_hist(hist, bins)
+    ret2,otsu = cv2.threshold(gray, 0, 255, 
+                              cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
     
-    hist_int = hist.cumsum(axis=0)
-    tresh = bins[np.argmax(hist_int > 0.2)]
-    print(tresh)
+    otsu_hist = otsu.sum(axis=0)
+    otsu_hist = otsu_hist/otsu_hist.max()
     
-    ret, th = cv2.threshold(gray,tresh,255,cv2.THRESH_BINARY_INV)
-    ret2,otsu = cv2.threshold(gray, 0, 255,cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
-    cv2.imshow("tresh", otsu)
+    #show_hist(otsu_hist, np.arange(otsu.shape[1] + 1))
     
-    print((otsu > 0).sum() / otsu.size)
-    
-    sobelx = np.abs(cv2.Sobel(gray,cv2.CV_64F,1,0,ksize=5))
-    sobelx = ((sobelx/sobelx.max())*255).astype(np.uint8)
-    sobely = np.abs(cv2.Sobel(gray,cv2.CV_64F,0,1,ksize=5))
-    sobely = ((sobely/sobely.max())*255).astype(np.uint8)
-    calc_variance(sobelx)
-    calc_variance(sobely)
-    sobel = sobelx + sobely
-    
-    cv2.imshow("sobel", sobel)
+    otsu[:, otsu_hist < MIN_H_MASK ] = 0
+    cv2.imshow("tresh", otsu)    
+
     im2, contours, hierarchy = cv2.findContours(otsu, cv2.RETR_TREE,
                                                 cv2.CHAIN_APPROX_SIMPLE)
     
@@ -242,13 +236,23 @@ def process_image(img, test=False):
     for i in range(0, len(contours)):
         if hierarchy[0][i][3] == -1:
             contours_out.append(contours[i])
-            
+    
+    rects = []
+    rects_bad = []        
     for contour in contours_out:
         x, y, w, h = cv2.boundingRect(contour)
-        symbol = img[y:y+h, x:x+w]
-        cv2.rectangle(img, (x, y), (x+w, y+h), (0,0,255),2)
-        
-    cv2.imshow("B", img)
+        if (w > img.shape[1]*MIN_SYMB_W and
+            h > img.shape[0]*MIN_SYMB_H):
+            rects.append([x, y, w, h])
+        else:
+            rects_bad.append([x,y,w,h])
+            
+    rects = np.array(rects)
+    rects[:, 1] = rects[:, 1].min()
+    rects[:, 3] = rects[:, 3].max()
+    rects = tuple(rects)
+    #print (np.array(rects).shape)    
+    return rects, rects_bad
 
 
 def mask_full_lines(img, test=False):
@@ -282,9 +286,21 @@ def mask_full_lines(img, test=False):
     if test:
         cv2.imshow("mask_full_hor_lines mask", full_mask)  
     return full_mask
-
     
+
+def parse_args():   
+    parser = ArgumentParser()
+    parser.add_argument('--save_path', type=str,
+                        help="Folder to save reults")
+    return parser.parse_args()
+
+ 
 if __name__ == "__main__":
+    
+    args = parse_args()
+    
+    save_path = args.save_path
+    
     if not path.exists(DATA_PATH):
         print("%s not found, start croping"%(DATA_PATH))
         system("python3 ../marking_tools/crop_pricers.py")
@@ -306,6 +322,10 @@ if __name__ == "__main__":
               %(DATASET_PATH))
         
     i = 0
+    
+    if save_path and not path.exists(save_path):
+        makedirs(save_path)
+    
     for image_name in listdir(DATASET_PATH):
         if i < 0:
             i += 1
@@ -314,17 +334,26 @@ if __name__ == "__main__":
         print(image_path)
         img = cv2.imread(image_path)
         
-        #clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(img.shape[1]//200,
-        #                                                     img.shape[0]//20))
-        #for i in range(img.shape[2]):
-        #   img[:,:,i] = clahe.apply(img[:,:,i])
+        clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(img.shape[1]//20,
+                                                             img.shape[0]//20))
+        for i in range(img.shape[2]):
+           img[:,:,i] = clahe.apply(img[:,:,i])
         
         #kernel = np.ones((5,10),np.uint8)
         #img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
         #cv2.imshow("clahe", img)
         
+        #mser = cv2.MSER_create()
+        #regions = mser.detectRegions(img)
+        #contours = [cv2.convexHull(reg) for reg in regions[0]]
+        #cv2.drawContours(img, contours, -1, (0, 255, 0))
+        
         gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-        rects, rects_inside = detect_text_cv(img)
+        
+        process_image(img, True)
+        
+        #rects, rects_inside = detect_text_cv(img)
+        rects, rects_inside =  process_image(img, True)
         
         vis = copy.copy(img)   
         for rect in rects:
@@ -335,18 +364,13 @@ if __name__ == "__main__":
             cv2.rectangle(vis, (rect[0], rect[1]),
                           (rect[0] + rect[2], rect[1] + rect[3]),
                           (0, 255, 255), 1)
-        cv2.imshow("vis", vis)
+        if save_path:
+            cv2.imwrite(path.join(save_path, image_name), vis)
+        else:
+            cv2.imshow("vis", vis)
             
-
-        
-        
-        #for rect in rects:
-        #    cv2.imshow("symbol", img[rect[1]: rect[1] + rect[3],
-        #                             rect[0]: rect[0] + rect[2]])
-        #    cv2.waitKey()
-        
-        k = cv2.waitKey() & 0xFF
-        if k == 27:
-            break
+            k = cv2.waitKey() & 0xFF
+            if k == 27:
+                break
 
     cv2.destroyAllWindows()
