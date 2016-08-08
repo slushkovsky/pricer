@@ -15,7 +15,7 @@ import sys
 import cv2
 import numpy as np
 
-main_dir = path.dirname(path.dirname(__file__))
+main_dir = path.dirname(path.dirname(path.abspath(__file__)))
 if not main_dir in sys.path:
     sys.path.append(main_dir)
 
@@ -215,11 +215,20 @@ def process_image(img, test=False):
     MIN_H_MASK = 0.15
     MIN_SYMB_W = 0.01
     MIN_SYMB_H = 0.4
+    TRESH_STEPS = 6
+    MIN_VARIANCE = 1000
     
     gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     
-    ret2,otsu = cv2.threshold(gray, 0, 255, 
-                              cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
+    #ret2,otsu = cv2.threshold(gray, 0, 255, 
+    #                          cv2.THRESH_OTSU + cv2.THRESH_BINARY_INV)
+    
+    step = img.shape[1]//TRESH_STEPS
+    otsu = np.zeros(gray.shape, np.uint8)
+    for i in range(0, img.shape[1], step):
+        ret2, otsu[:, i:i+step] = cv2.threshold(gray[:, i:i+step], 
+                                                0, 255, cv2.THRESH_OTSU +
+                                                cv2.THRESH_BINARY_INV)
     
     otsu_hist = otsu.sum(axis=0)
     otsu_hist = otsu_hist/otsu_hist.max()
@@ -241,16 +250,25 @@ def process_image(img, test=False):
     rects_bad = []        
     for contour in contours_out:
         x, y, w, h = cv2.boundingRect(contour)
+        
+        if gray[y: y+h, max(0, x - w//5):
+                min(gray.shape[1], x + int(w*6/5))].var() < MIN_VARIANCE:
+            rects_bad.append([x,y,w,h])
+            continue
+        
         if (w > img.shape[1]*MIN_SYMB_W and
             h > img.shape[0]*MIN_SYMB_H):
             rects.append([x, y, w, h])
         else:
             rects_bad.append([x,y,w,h])
             
+        
+            
     rects = np.array(rects)
-    rects[:, 1] = rects[:, 1].min()
-    rects[:, 3] = rects[:, 3].max()
-    rects = tuple(rects)
+    if len(rects):
+        rects[:, 1] = rects[:, 1].min()
+        rects[:, 3] = rects[:, 3].max()
+        rects = tuple(rects)
     #print (np.array(rects).shape)    
     return rects, rects_bad
 
@@ -290,6 +308,8 @@ def mask_full_lines(img, test=False):
 
 def parse_args():   
     parser = ArgumentParser()
+    parser.add_argument('--dataset_path', type=str,
+                        help="Folder to save reults")
     parser.add_argument('--save_path', type=str,
                         help="Folder to save reults")
     return parser.parse_args()
@@ -301,56 +321,49 @@ if __name__ == "__main__":
     
     save_path = args.save_path
     
-    if not path.exists(DATA_PATH):
-        print("%s not found, start croping"%(DATA_PATH))
-        system("python3 ../marking_tools/crop_pricers.py")
-        print("croping done")
-
-    names_path = path.join(DATA_PATH, "names")
-    if not path.exists(names_path):
-        print("%s not found, start croping"%(names_path))
-        system("python3 ../marking_tools/crop_pricer_fields.py")
-        print("croping done")
+    images = None
+    dataset_path = None
+    if not args.dataset_path:
+        if not path.exists(DATA_PATH):
+            print("%s not found, start croping"%(DATA_PATH))
+            system("python3 ../marking_tools/crop_pricers.py")
+            print("croping done")
     
-    if not path.exists(DATASET_PATH):
-        print("%s not found, start croping"%(DATASET_PATH))
-        system("python3 %s"%(path.join(path.dirname(__file__),
-                                       "extract_text_lines.py")))
-        print("croping done")
-    else:
-        print("%s found, skip croping. To force restart delete this folder"
-              %(DATASET_PATH))
+        names_path = path.join(DATA_PATH, "names")
+        if not path.exists(names_path):
+            print("%s not found, start croping"%(names_path))
+            system("python3 ../marking_tools/crop_pricer_fields.py")
+            print("croping done")
         
-    i = 0
+        if not path.exists(DATASET_PATH):
+            print("%s not found, start croping"%(DATASET_PATH))
+            system("python3 %s"%(path.join(path.dirname(__file__),
+                                           "extract_text_lines.py")))
+            print("croping done")
+        else:
+            print("%s found, skip croping. To force restart delete this folder"
+                  %(DATASET_PATH))
+        dataset_path = DATASET_PATH
+        images = listdir(dataset_path)
+    else:
+        if path.isdir(args.dataset_path):
+            dataset_path = args.dataset_path
+            images = listdir(dataset_path)
+        else:
+            dataset_path = path.abspath(path.dirname(args.dataset_path))
+            images = [path.basename(args.dataset_path)]
+            
     
     if save_path and not path.exists(save_path):
         makedirs(save_path)
     
-    for image_name in listdir(DATASET_PATH):
-        if i < 0:
-            i += 1
+    for image_name in images:
+        if not image_name.endswith("jpg"):
             continue
-        image_path = path.join(DATASET_PATH, image_name)
+        
+        image_path = path.join(dataset_path, image_name)
         print(image_path)
         img = cv2.imread(image_path)
-        
-        clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(img.shape[1]//20,
-                                                             img.shape[0]//20))
-        for i in range(img.shape[2]):
-           img[:,:,i] = clahe.apply(img[:,:,i])
-        
-        #kernel = np.ones((5,10),np.uint8)
-        #img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
-        #cv2.imshow("clahe", img)
-        
-        #mser = cv2.MSER_create()
-        #regions = mser.detectRegions(img)
-        #contours = [cv2.convexHull(reg) for reg in regions[0]]
-        #cv2.drawContours(img, contours, -1, (0, 255, 0))
-        
-        gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
-        
-        process_image(img, True)
         
         #rects, rects_inside = detect_text_cv(img)
         rects, rects_inside =  process_image(img, True)
