@@ -144,7 +144,7 @@ def imgCrop(img, bounties):
 
 
 def proccess_marking(img, model_path, config_path, out_path
-					, extract_func, save_func = save_marking_diff_files
+					, extract_func, save_func 
 									, args = None, pref = '', suf = ''):
 	coordinates = ask_localization_net(img, model_path, config_path)
 	x0, y0, x1, y1, x2, y2, x3, y4 = coordinates
@@ -157,11 +157,10 @@ def proccess_rkn(data_path, rubli_model_path, rubli_config_path
 								,kopeiki_model_path, kopeiki_config_path
 								,name_model_path, name_config_path
 								,classifiers ,out_path
-								, save_func = save_marking_diff_files
-														, unpr = False):
+								, save_func , unpr = False):
 	files = os.listdir(data_path)
 	inter = filter(lambda x: x.endswith(FILES_END_WITH), files)
-	save_marking_diff_files(out_path, (0, 0, 0, 0)
+	save_func(out_path, (0, 0, 0, 0)
 										, need_clear = 1)	#clear file
 	for i in range(len(inter)):
 		if unpr:
@@ -171,12 +170,13 @@ def proccess_rkn(data_path, rubli_model_path, rubli_config_path
 		img = cv2.imread(img_path)
 		proccess_marking(img, rubli_model_path, rubli_config_path
 										, out_path, extract_rubli_rects
+										, save_func
 										, pref = inter[i], suf = 'r')
 		#proccess_marking(img, kopeiki_model_path, kopeiki_config_path
-			#, out_path, extract_rubli_rects
+			#, out_path, extract_rubli_rects, save_func
 			#, pref = inter[i], suf = 'k')
 		proccess_marking(img, name_model_path, name_config_path
-					, out_path, extract_symbol_rects
+					, out_path, extract_symbol_rects, save_func
 					, args = classifiers, pref = inter[i], suf = 'n')
 
 def mark_arguments():
@@ -220,8 +220,11 @@ def mark_arguments():
 			,help = 'Enter path to second classifier. ' +
 									'Default is %s' % DEFAULT_NM2)
 
+	parser.add_argument('--onef', action='store_true'
+				, help = 'Use if you want to save output in one file. '+
+							'This way, you should specify the out path')
 	parser.add_argument('--unpr', action='store_false'
-				, help = 'Use if you want to unable progress interface')
+				, help = 'Use if you want to unable progress interface.')
 	parser.add_argument('--out', type = str, default = DEFAULT_OUT_NAME,
 				help = 'Enter path to output file. Default is %s'
 													% DEFAULT_OUT_NAME)
@@ -232,10 +235,14 @@ def mark_arguments():
 if __name__ == '__main__':
 	args = mark_arguments()
 	nm = (args.nm1, args.nm2)
+	save_func = save_marking_diff_files
+	if args.onef:
+		save_func = save_marking
 	try:
 		proccess_rkn(args.data_path, args.rub_model, args.rub_config
 									, args.kop_model, args.kop_config
 									, args.name_model, args.name_config
-											, nm, args.out, args.unpr)
+											, nm, args.out
+											, save_func, args.unpr)
 	except KeyboardInterrupt:
 		print()
