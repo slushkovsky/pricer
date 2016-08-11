@@ -95,17 +95,33 @@ def save_marking(path, coordinates, pref, suf):
 	with open(path, 'a') as out_file:
 		out_file.write(out_str)
 
+def imgCrop(pricer_img, bounties):
+	tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y = bounties
+	#Compute approximate width and height of the image to correct perspective 
+	width_y = max((tr_y - tl_y)**2, (br_y - bl_y)**2)
+	width_x = max((tr_x - tl_x)**2, (br_x - bl_x)**2)
+	width = sqrt(width_y + width_x)
+	height_y = max((tl_y - bl_y)**2, (tr_y - br_y)**2)
+	height_x = max((bl_x - tl_x)**2, (br_x - tl_x)**2)
+	height = sqrt(height_y + height_x)
+	#Correcting perspective and cropping the image
+	pts1 = np.float32([[tl_x, tl_y], [tr_x, tr_y], [bl_x, bl_y], [br_x, br_y]])
+	pts2 = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
+	matrix = cv2.getPerspectiveTransform(pts1, pts2)
+	img = cv2.warpPerspective(img, matrix,(img_h, img_w))
+	img = img[0:height, 0:width]
+	return img
+
+
 def proccess_marking(img, model_path, config_path, out_path
 					, extract_func, args = None ,pref = '', suf = ''):
 	coordinates = ask_localization_net(img, model_path, config_path)
-	x, y, w, h , a, b, c, d = coordinates
-	crop = img[y:y + h, x:x + w]
-	rects = extract_func(img, args, offset = (x, y))
+	x0, y0, x1, y1, x2, y2, x3, y4 = coordinates
+	crop = imgCrop(img, coordinates)
+	rects = extract_func(crop, args, offset = (x0, y0))
 	for rect in rects:
 		save_marking(out_path, rect, pref, suf)
 
-def extract(img, args = None, offset = (0, 0)):
-	return [(0, 0, 2, 2)]
 
 def proccess_rkn(data_path, rubli_model_path, rubli_config_path
 								,kopeiki_model_path, kopeiki_config_path
