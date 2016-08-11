@@ -104,6 +104,8 @@ def detect_text_cv(img, nm1_path, nm2_path):
             rects.append([x,y,w,h])
     
     rects_merged = []
+    rects_outside = []
+    rects_inside = []
     if len(rects) > 0:
         rects_merged = merge_close_rects(rects, MERGE_STEP_PIXELS)
         rects_merged = filter_rects_wh(rects_merged, MAX_W_H_RATIO)        

@@ -24,7 +24,7 @@ from split_hist_cv import split_lines_hist, crop_regions
 from split_symbols_cv import detect_text_cv
 from split_ruble_symbols import process_image
 
-def resize_img_h(img, new_h=250):
+def resize_img_h(img, new_h=500):
     scale = new_h / img.shape[0]
     new_size = np.array(img.shape) * scale 
     new_size = tuple(np.flipud(new_size[0:2]).astype(np.int))
@@ -44,11 +44,11 @@ def parse_mark(line, datapath, prefix=""):
     return img, cnt
     
     
-def process_pricer(datapath, line, prefix="", new_h=250):
+def process_pricer(datapath, line, prefix="", new_h=700):
     img, cnt = parse_mark(line, datapath, prefix=prefix)
     if img is None:
         return None, cnt
-    img, scale = resize_img_h(img, new_h=250)
+    img, scale = resize_img_h(img, new_h=new_h)
     cnt = (cnt * scale).astype(np.int)
     return img, cnt, scale
     
@@ -57,10 +57,11 @@ def extract_symbol_rects(crop, nm1, nm2, offset=(0,0)):
     rects, rects_bad = [], []
     regions = crop_regions(split_lines_hist(crop), crop.shape[0]*0.15)   
     for i in range(len(regions)):
-        cur_img_part = img[regions[i][0]:regions[i][1],:]
+        cur_img_part = crop[regions[i][0]:regions[i][1],:]
         cur_rects, cur_rects_bad = detect_text_cv(cur_img_part,
                                                   nm1, 
                                                   nm2)
+        
         for rect in cur_rects:
             rect[1] += regions[i][0] + offset[1]
             rect[0] += offset[0]
@@ -74,7 +75,7 @@ def extract_symbol_rects(crop, nm1, nm2, offset=(0,0)):
     
     
 def extract_rubli_rects(img, offset=(0,0)):
-    rects = process_image(crop)
+    rects = process_image(img)
     for i in range(len(rects)):
         rects[i][0] += offset[0]
         rects[i][1] += offset[1]
@@ -114,8 +115,6 @@ def parse_args():
                                           "trained_classifierNM2.xml")),
                         help="Path to pretrained NM2 dtree classifier")
     parser.add_argument("--img", help="execute for one image")
-    parser.add_argument("--outfile", default="rects.txt",
-                        help="file with output markings")
     parser.add_argument("--outdir", default=path.join(path.dirname(__file__),
                                                       "split_data"),
                         help="output directory")
@@ -141,9 +140,11 @@ if __name__ == "__main__":
         if path.exists(args.outdir):
             shutil.rmtree(args.outdir)
         makedirs(args.outdir)
-        out = open(path.join(args.outdir, args.outfile), "w")
     
     for key in keys:
+        out = open(path.join(args.outdir,
+                             path.splitext(path.basename(key))[0] + ".box"),
+                   "w")
         rects, rects_bad, rects_rub = [], [], []
         scale = None
         if not path.exists(path.join(args.datapath, key)):
@@ -199,17 +200,15 @@ if __name__ == "__main__":
         else:
             cv2.imwrite(path.join(args.outdir, key), vis)
             for rect in rects:
-                out.write("%s * %s %s %s %s 0 n\n"%(key, 
-                                                int(rect[0]/scale), 
-                                                int((rect[1] + rect[3])/scale), 
-                                                int((rect[0] + rect[2])/scale), 
-                                                int((rect[1])/scale)))
+                out.write("* %s %s %s %s 0 n\n"%(int(rect[0]/scale), 
+                                                 int((rect[1] + rect[3])/scale), 
+                                                 int((rect[0] + rect[2])/scale), 
+                                                 int((rect[1])/scale)))
             for rect in rects_rub:
-                out.write("%s * %s %s %s %s 0 r\n"%(key, 
-                                                int(rect[0]/scale), 
-                                                int((rect[1] + rect[3])/scale), 
-                                                int((rect[0] + rect[2])/scale), 
-                                                int((rect[1])/scale)))
+                out.write("* %s %s %s %s 0 r\n"%(int(rect[0]/scale), 
+                                                 int((rect[1] + rect[3])/scale), 
+                                                 int((rect[0] + rect[2])/scale), 
+                                                 int((rect[1])/scale)))
             
         
         
