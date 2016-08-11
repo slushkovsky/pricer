@@ -83,9 +83,9 @@ if __name__ == '__main__':
 		out_file.close()
 
 	files = os.listdir(DATA_PATH)
-	img_list = filter(lambda x: x.endswith('.jpg'), files)
+	img_list = xfilter(lambda x: x.endswith('.jpg'), files)
 
-	print TIP
+	print (TIP)
 	out_file = open(os.path.join(DATA_PATH, OUT_FILE_NAME), 'r')
 	size = len(out_file.readlines())
 	if len(sys.argv) > 1 and sys.argv[1] == 'new':

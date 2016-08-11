@@ -2,8 +2,10 @@ import cv2
 import argparse
 import os
 import sys
+from math import sqrt
 import numpy as np
 from collections import namedtuple
+import shutil
 
 os.environ['GLOG_minloglevel'] = '2' 
 # Caffe quiet (log levels: 0-debug, 1-all info, 2-warnings, 3-errors)
@@ -20,7 +22,7 @@ OUTPUT_LAYER_NAME = 'ip2'
 
 FILES_END_WITH = '.jpg'
 
-DEFAULT_OUT_NAME = 'mark.box'
+DEFAULT_OUT_NAME = './marking_box'
 DEFAULT_RUB_MODEL = '../workspace/Pricer/Rubli60x30/Rubli60x30_iter_10000.caffemodel'
 DEFAULT_RUB_CONF = '../workspace/Pricer/Rubli60x30/netconfig.prototxt'
 DEFAULT_KOP_MODEL = '../workspace/Pricer/Kopeiki60x30/Kopeiki60x30_iter_10000.caffemodel'
@@ -84,67 +86,98 @@ def extract_rubli_rects(img, args = None, offset=(0,0)):
 		rects[i][1] += offset[1]
 	return rects
 
+
+def extract_debug(img, args, offset):
+	return [(0, 0, 0, 0)]
+
 def clear_file(path):
 	f = open(path, 'w')
 	f.close()
 
-def save_marking(path, coordinates, pref, suf):
+def save_marking_diff_files(out_path, coordinates, name = '', suf = ''
+													, need_clear = 0):
+	if need_clear:
+		if(os.path.exists(out_path)):
+			ans = raw_input('Path already exist.'+ 
+									'Would you like delete it? y/n \n')
+			if ans == 'y':
+				shutil.rmtree(out_path)
+			else:
+				print 'Specify a different path'
+				return
+		os.makedirs(out_path)
+		return
+	name += '.box'
+	path = os.path.join(out_path, name)
+	x0, y0, x1, y1 = coordinates
+	coords_str = ' '.join([str(x0), str(y0), str(x1), str(y1)])
+	out_str = ' '.join(['*', coords_str, '0', suf]) + '\n'
+	with open(path, 'a') as out_file:
+		out_file.write(out_str)
+
+def save_marking(path, coordinates, pref = '', suf = '' 
+													, need_clear = 0):
+	if need_clear:
+		clear_file(path)
+		return
 	x0, y0, x1, y1 = coordinates
 	coords_str = ' '.join([str(x0), str(y0), str(x1), str(y1)])
 	out_str = ' '.join([pref, '*', coords_str, '0', suf]) + '\n'
 	with open(path, 'a') as out_file:
 		out_file.write(out_str)
 
-def imgCrop(pricer_img, bounties):
+def imgCrop(img, bounties):
 	tl_x, tl_y, tr_x, tr_y, br_x, br_y, bl_x, bl_y = bounties
 	#Compute approximate width and height of the image to correct perspective 
 	width_y = max((tr_y - tl_y)**2, (br_y - bl_y)**2)
 	width_x = max((tr_x - tl_x)**2, (br_x - bl_x)**2)
-	width = sqrt(width_y + width_x)
+	width = int(sqrt(width_y + width_x))
 	height_y = max((tl_y - bl_y)**2, (tr_y - br_y)**2)
 	height_x = max((bl_x - tl_x)**2, (br_x - tl_x)**2)
-	height = sqrt(height_y + height_x)
+	height = int(sqrt(height_y + height_x))
 	#Correcting perspective and cropping the image
 	pts1 = np.float32([[tl_x, tl_y], [tr_x, tr_y], [bl_x, bl_y], [br_x, br_y]])
 	pts2 = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
 	matrix = cv2.getPerspectiveTransform(pts1, pts2)
-	img = cv2.warpPerspective(img, matrix,(img_h, img_w))
-	img = img[0:height, 0:width]
+	img = cv2.warpPerspective(img, matrix, (width, height))
 	return img
 
 
 def proccess_marking(img, model_path, config_path, out_path
-					, extract_func, args = None ,pref = '', suf = ''):
+					, extract_func, save_func = save_marking_diff_files
+									, args = None, pref = '', suf = ''):
 	coordinates = ask_localization_net(img, model_path, config_path)
 	x0, y0, x1, y1, x2, y2, x3, y4 = coordinates
 	crop = imgCrop(img, coordinates)
 	rects = extract_func(crop, args, offset = (x0, y0))
 	for rect in rects:
-		save_marking(out_path, rect, pref, suf)
-
+		save_func(out_path, rect, pref, suf)
 
 def proccess_rkn(data_path, rubli_model_path, rubli_config_path
 								,kopeiki_model_path, kopeiki_config_path
 								,name_model_path, name_config_path
-								,classifiers ,out_path, unpr = False):
+								,classifiers ,out_path
+								, save_func = save_marking_diff_files
+														, unpr = False):
 	files = os.listdir(data_path)
-	jpg = filter(lambda x: x.endswith(FILES_END_WITH), files)
-	clear_file(out_path)
-	for i in range(len(jpg)):
+	inter = filter(lambda x: x.endswith(FILES_END_WITH), files)
+	save_marking_diff_files(out_path, (0, 0, 0, 0)
+										, need_clear = 1)	#clear file
+	for i in range(len(inter)):
 		if unpr:
-			progress(float(i) / len(jpg), pref = 'Loading  '
-								, suf = ' (%d / %d)' % (i, len(jpg)))
-		img_path = os.path.join(data_path, jpg[i])
+			progress(float(i) / len(inter), pref = 'Loading  '
+								, suf = ' (%d / %d)' % (i, len(inter)))
+		img_path = os.path.join(data_path, inter[i])
 		img = cv2.imread(img_path)
 		proccess_marking(img, rubli_model_path, rubli_config_path
 										, out_path, extract_rubli_rects
-											, pref = jpg[i], suf = 'r')
+										, pref = inter[i], suf = 'r')
 		#proccess_marking(img, kopeiki_model_path, kopeiki_config_path
 			#, out_path, extract_rubli_rects
-			#, pref = jpg[i], suf = 'k')
+			#, pref = inter[i], suf = 'k')
 		proccess_marking(img, name_model_path, name_config_path
-						, out_path, extract_symbol_rects
-						, args = classifiers, pref = jpg[i], suf = 'n')
+					, out_path, extract_symbol_rects
+					, args = classifiers, pref = inter[i], suf = 'n')
 
 def mark_arguments():
 	parser = argparse.ArgumentParser(description ='This script allows' +
