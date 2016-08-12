@@ -148,6 +148,15 @@ def proccess_marking(img, model_path, config_path, out_path
 									, args = None, pref = '', suf = ''):
 	coordinates = ask_localization_net(img, model_path, config_path)
 	x0, y0, x1, y1, x2, y2, x3, y4 = coordinates
+	x0 *= img.shape[1]
+	x1 *= img.shape[1]
+	x2 *= img.shape[1]
+	x3 *= img.shape[1]
+	y0 *= img.shape[0]
+	y1 *= img.shape[0]
+	y2 *= img.shape[0]
+	y3 *= img.shape[0]
+	coordinates = x0, y0, x1, y1, x2, y2, x3, y4
 	crop = imgCrop(img, coordinates)
 	rects = extract_func(crop, args, offset = (x0, y0))
 	for rect in rects:
