@@ -43,12 +43,17 @@ def rescale_rects(rects, scale):
     return rects
 
 
-def filter_rects_wh(rects, max_w_h_ratio=1.5):
+def filter_rects_wh(rects, max_w_h_ratio=1.5, min_h=None):
     rects_buf = []
+
     for i in range(len(rects)):
         rect = rects[i]
+        if min_h and rect[3] < min_h:
+            continue
+        
         if not rect[2]/rect[3] > max_w_h_ratio:
             rects_buf.append(rect)
+            
     return rects_buf
 
 
@@ -75,16 +80,24 @@ def find_rects_inside(rects):
     return rects_outside, rects_inside
     
     
-def detect_text_cv(img, nm1_path, nm2_path):
+def detect_text_cv(img, nm1_path, nm2_path, group_path=None):
     MAX_W_H_RATIO = 1.5
     IMG_H = 100
+    MIN_SYMB_H = 30
     MERGE_STEP_PIXELS = 20
     w = int(IMG_H*img.shape[1]/img.shape[0])
     scale = np.array(img.shape)
     img = cv2.resize(img, (w, IMG_H))
+    
     scale = scale/np.array(img.shape)
     
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(IMG_H//3,IMG_H//3))
+    for i in range(img.shape[2]):
+        img[:,:,i] = clahe.apply(img[:,:,i])
+    
     channels = cv2.text.computeNMChannels(img)
+   
+    vis = img.copy()
 
     rects = []
     for channel in channels:
@@ -98,7 +111,18 @@ def detect_text_cv(img, nm1_path, nm2_path):
                                          0.4)
         erc2 = cv2.text.loadClassifierNM2(nm2_path)
         er2 = cv2.text.createERFilterNM2(erc2,0.5)
+        
         regions = cv2.text.detectRegions(channel,er1, er2)
+        if False:
+            rects_ = cv2.text.erGrouping(img, channel,
+                                         [r.tolist() for r in regions])
+                                                        
+            for r in range(0,np.shape(rects_)[0]):
+                rect = rects_[r]
+                cv2.rectangle(vis, (rect[0],rect[1]),
+                              (rect[0]+rect[2],rect[1]+rect[3]),
+                              (0, 255, 255), 2)
+      
         for i in range(len(regions)):
             x,y,w,h = cv2.boundingRect(regions[i])
             rects.append([x,y,w,h])
@@ -108,7 +132,8 @@ def detect_text_cv(img, nm1_path, nm2_path):
     rects_inside = []
     if len(rects) > 0:
         rects_merged = merge_close_rects(rects, MERGE_STEP_PIXELS)
-        rects_merged = filter_rects_wh(rects_merged, MAX_W_H_RATIO)        
+        rects_merged = filter_rects_wh(rects_merged, MAX_W_H_RATIO,
+                                       MIN_SYMB_H)        
         rects_outside, rects_inside = find_rects_inside(rects_merged)
       
     rects_outside = rescale_rects(rects_outside, scale)

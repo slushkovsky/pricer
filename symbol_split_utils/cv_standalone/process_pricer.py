@@ -24,7 +24,7 @@ from split_hist_cv import split_lines_hist, crop_regions
 from split_symbols_cv import detect_text_cv
 from split_ruble_symbols import process_image
 
-def resize_img_h(img, new_h=500):
+def resize_img_h(img, new_h):
     scale = new_h / img.shape[0]
     new_size = np.array(img.shape) * scale 
     new_size = tuple(np.flipud(new_size[0:2]).astype(np.int))
@@ -118,6 +118,11 @@ def parse_args():
     parser.add_argument("--outdir", default=path.join(path.dirname(__file__),
                                                       "split_data"),
                         help="output directory")
+    parser.add_argument("--resize_out", action="store_true",
+                        help="Resize output marked pricers")
+    parser.add_argument("--resize_h", type=int, default=700,
+                        help="Internal processing pricer height size "
+                        "(default 700)")
                         
     return parser.parse_args()
     
@@ -129,32 +134,38 @@ if __name__ == "__main__":
     rubles_marks = merge_mark_files(glob.glob(args.rubli_wildcard))
     
     keys = []
-    out = None
+    keys += list(names_marks.keys())
+    keys +=list(rubles_marks.keys())
+    keys = list(set(keys))
+    
+    batch = []
     if args.img:
-        keys.append(args.img)
+        batch.append(args.img)
     else:
-        keys += list(names_marks.keys())
-        keys +=list(rubles_marks.keys())
-        keys = list(set(keys))
-        
+        batch += keys
         if path.exists(args.outdir):
             shutil.rmtree(args.outdir)
         makedirs(args.outdir)
-    
-    for key in keys:
-        out = open(path.join(args.outdir,
-                             path.splitext(path.basename(key))[0] + ".box"),
-                   "w")
+        
+    for key in batch:
+        out = None
+        if not args.img:
+            out = open(path.join(args.outdir, 
+                                 path.splitext(path.basename(key))[0] + 
+                                 ".box"), "w")
+                            
         rects, rects_bad, rects_rub = [], [], []
         scale = None
         if not path.exists(path.join(args.datapath, key)):
             print("image %s not found"%(path.join(args.datapath, key)))
             continue
         
+        scale = 1
         if key in names_marks:
             try:
                 img, cnt, scale = process_pricer(args.datapath,
-                                                 names_marks[key])
+                                                 names_marks[key],
+                                                 new_h=args.resize_h)
                 
                 if img is None:
                     print("cant open image %s"%(path.join(args.datapath, key)))
@@ -171,7 +182,8 @@ if __name__ == "__main__":
         if key in rubles_marks:
             try:
                 img, cnt, scale = process_pricer(args.datapath,
-                                                 rubles_marks[key])
+                                                 rubles_marks[key], 
+                                                 new_h=args.resize_h)
                 if img is None:
                     print("cant open image %s"%(path.join(args.datapath, key)))
                     continue
@@ -182,12 +194,19 @@ if __name__ == "__main__":
                 print("cant process image %s"%(path.join(args.datapath, key)))
                 continue
         
-        vis = img.copy()
+        vis = None
+        if args.resize_out:
+            vis = img.copy()
+        else:
+            vis = cv2.imread(path.join(args.datapath, key))
+            rects_rub = [(np.array(r)/scale).astype(np.int) for r in rects_rub]
+            rects = [(np.array(r)/scale).astype(np.int) for r in rects]
+        
         for rect in rects_rub:
             cv2.rectangle(vis, (rect[0], rect[1]),
                           (rect[0] + rect[2], rect[1] + rect[3]),
                           (0, 255, 0), 2)
-            
+       
         for rect in rects:
             cv2.rectangle(vis, (rect[0], rect[1]),
                           (rect[0] + rect[2], rect[1] + rect[3]),
