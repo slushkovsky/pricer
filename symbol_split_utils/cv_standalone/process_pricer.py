@@ -53,14 +53,15 @@ def process_pricer(datapath, line, prefix="", new_h=700):
     return img, cnt, scale
     
     
-def extract_symbol_rects(crop, nm1, nm2, offset=(0,0)):
+def extract_symbol_rects(crop, nm1, nm2, offset=(0,0), min_variance=1000):
     rects, rects_bad = [], []
-    regions = crop_regions(split_lines_hist(crop), crop.shape[0]*0.15)   
+    regions = [[0,  crop.shape[0]]]#crop_regions(split_lines_hist(crop), crop.shape[0]*0.15)   
     for i in range(len(regions)):
         cur_img_part = crop[regions[i][0]:regions[i][1],:]
         cur_rects, cur_rects_bad = detect_text_cv(cur_img_part,
                                                   nm1, 
-                                                  nm2)
+                                                  nm2,
+                                                  min_variance=min_variance)
         
         for rect in cur_rects:
             rect[1] += regions[i][0] + offset[1]
@@ -88,6 +89,12 @@ def merge_mark_files(files):
         for line in open(file, "r").readlines():
             markings[line.split()[0]] = line
     return markings
+
+    
+def variance_of_laplacian(image):
+	# compute the Laplacian of the image and then return the focus
+	# measure, which is simply the variance of the Laplacian
+	return cv2.Laplacian(image, cv2.CV_64F).var()    
 
     
 def parse_args():
@@ -123,6 +130,10 @@ def parse_args():
     parser.add_argument("--resize_h", type=int, default=700,
                         help="Internal processing pricer height size "
                         "(default 700)")
+    parser.add_argument("--min_var", type=int, default=-1,
+                        help="Minimal variance of pricer name field")
+    parser.add_argument("--min_symb_var", type=int, default=1000,
+                        help="Minimal variance of pricer (default 1000)")
                         
     return parser.parse_args()
     
@@ -146,14 +157,8 @@ if __name__ == "__main__":
         if path.exists(args.outdir):
             shutil.rmtree(args.outdir)
         makedirs(args.outdir)
-        
+    
     for key in batch:
-        out = None
-        if not args.img:
-            out = open(path.join(args.outdir, 
-                                 path.splitext(path.basename(key))[0] + 
-                                 ".box"), "w")
-                            
         rects, rects_bad, rects_rub = [], [], []
         scale = None
         if not path.exists(path.join(args.datapath, key)):
@@ -161,6 +166,7 @@ if __name__ == "__main__":
             continue
         
         scale = 1
+        img = None
         if key in names_marks:
             try:
                 img, cnt, scale = process_pricer(args.datapath,
@@ -171,13 +177,28 @@ if __name__ == "__main__":
                     print("cant open image %s"%(path.join(args.datapath, key)))
                     continue
                 x,y,w,h = cv2.boundingRect(cnt)
+                
                 crop = img[y:y+h, x:x+w]
+
+                if args.min_var > 0:
+                    var = variance_of_laplacian(crop)
+                    if args.img:
+                        print("variance - %s"%(var))
+                    if var < args.min_var:
+                        print("%s too blured (%s < %s)"%(key, var,
+                              args.min_var))
+                        continue
             
                 rects, rects_bad = extract_symbol_rects(crop, args.nm1,
-                                                        args.nm2, offset=(x,y))
+                                                        args.nm2,
+                                                        offset=(x,y), 
+                                                        min_variance=\
+                                                        args.min_symb_var)
             except ValueError:
                 print("cant process image %s"%(path.join(args.datapath, key)))
                 continue
+        elif args.min_var > 0:
+            continue
             
         if key in rubles_marks:
             try:
@@ -218,6 +239,10 @@ if __name__ == "__main__":
             break
         else:
             cv2.imwrite(path.join(args.outdir, key), vis)
+            if not args.img:
+                out = open(path.join(args.outdir, 
+                                     path.splitext(path.basename(key))[0] + 
+                                     ".box"), "w")
             for rect in rects:
                 out.write("* %s %s %s %s 0 n\n"%(int(rect[0]/scale), 
                                                  int((rect[1] + rect[3])/scale), 

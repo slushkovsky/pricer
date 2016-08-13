@@ -8,6 +8,7 @@ Created on Wed Jul  6 23:54:39 2016
 
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 
 def merge_close_rects(rects, merge_step_pixels=20):
     if not len(rects):
@@ -43,7 +44,7 @@ def rescale_rects(rects, scale):
     return rects
 
 
-def filter_rects_wh(rects, max_w_h_ratio=1.5, min_h=None):
+def filter_rects_wh(rects, max_wh_ratio=1.5, min_h=None):
     rects_buf = []
 
     for i in range(len(rects)):
@@ -51,10 +52,22 @@ def filter_rects_wh(rects, max_w_h_ratio=1.5, min_h=None):
         if min_h and rect[3] < min_h:
             continue
         
-        if not rect[2]/rect[3] > max_w_h_ratio:
+        if not rect[2]/rect[3] > max_wh_ratio:
             rects_buf.append(rect)
             
     return rects_buf
+    
+def filter_rects_variance(img, rects, min_var):
+    rects_filtered = []
+    for rect in rects:
+        symb = img[rect[1]:rect[1]+rect[3],rect[0]:rect[0] + rect[2]]
+        if symb.var() > min_var:
+            rects_filtered.append(rect)
+        
+        #plt.imshow(symb)
+        #plt.show()
+        #print(symb.var())
+    return rects_filtered
 
 
 def find_rects_inside(rects):
@@ -80,20 +93,36 @@ def find_rects_inside(rects):
     return rects_outside, rects_inside
     
     
-def detect_text_cv(img, nm1_path, nm2_path, group_path=None):
-    MAX_W_H_RATIO = 1.5
-    IMG_H = 100
-    MIN_SYMB_H = 30
-    MERGE_STEP_PIXELS = 20
-    w = int(IMG_H*img.shape[1]/img.shape[0])
+def detect_text_cv(img, nm1_path, nm2_path, min_variance=200,
+                   max_wh_ratio=1.5, img_h=300, min_symb_h=0,
+                   merge_step_pixels=20):
+    """ Детектирование символов на изображении с помощью текстового
+    модуля opencv.
+    
+    Keyword arguments:
+        img -- Входное цветное изображенияю
+        nm1_path -- Путь к файлу обученного NM1 классификатора.
+        nm2_path -- Путь к файлу обученного NM2 классификатора.
+        min_variance -- Минимальная вариация внутри контура с символом.
+        Чем меньше значение параметра, тем более смазанные изображения будут
+        проходить через фильтрю
+        max_wh_ratio -- Максимальное соотношение ширины к высоте символа.
+        img_h -- Высота в пикселях, к которой будет пережато изображение.
+        min_symb_h -- Минимальная высота символа в пикселях.
+        merge_step_pixels -- Минимальное смещение между отдельными контурами.
+        Контуры, смещенные меньше этого параметра будут объеденены.
+        
+    """
+    
+    w = int(img_h*img.shape[1]/img.shape[0])
     scale = np.array(img.shape)
-    img = cv2.resize(img, (w, IMG_H))
+    img = cv2.resize(img, (w, img_h))
     
     scale = scale/np.array(img.shape)
     
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(IMG_H//3,IMG_H//3))
-    for i in range(img.shape[2]):
-        img[:,:,i] = clahe.apply(img[:,:,i])
+    #clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(img_h//3,img_h//3))
+    #for i in range(img.shape[2]):
+    #    img[:,:,i] = clahe.apply(img[:,:,i])
     
     channels = cv2.text.computeNMChannels(img)
    
@@ -131,10 +160,11 @@ def detect_text_cv(img, nm1_path, nm2_path, group_path=None):
     rects_outside = []
     rects_inside = []
     if len(rects) > 0:
-        rects_merged = merge_close_rects(rects, MERGE_STEP_PIXELS)
-        rects_merged = filter_rects_wh(rects_merged, MAX_W_H_RATIO,
-                                       MIN_SYMB_H)        
+        rects_merged = merge_close_rects(rects, merge_step_pixels)
+        rects_merged = filter_rects_wh(rects_merged, max_wh_ratio,
+                                       min_symb_h)        
         rects_outside, rects_inside = find_rects_inside(rects_merged)
+        rects_outside = filter_rects_variance(img, rects_outside, min_variance)
       
     rects_outside = rescale_rects(rects_outside, scale)
     rects_inside = rescale_rects(rects_inside, scale)    

@@ -21,7 +21,7 @@ del tools_dir
 from markers_db_tools import Base
 from db_editor import DbEditor
 
-DATASET_NAME = "nochar"
+DATASET_NAME = "symbols"
 DB_PATH = 'sqlite:///%s/marked_pricers/db/%s.db'%(environ["BEORGDATA"],
                                                   DATASET_NAME)
 DATA_DIR = environ["BEORGDATAGEN"] + "/CData_full"
