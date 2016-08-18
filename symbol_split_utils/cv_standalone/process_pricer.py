@@ -15,17 +15,28 @@ from argparse import ArgumentParser
 
 import cv2
 import numpy as np
+from scipy.signal import argrelextrema
 
 main_dir = path.abspath(path.join(path.dirname(__file__), "../.."))
 if not main_dir in sys.path:
     sys.path.append(main_dir)
 del main_dir
 
-from classify_symb import PriceClassifier, NameClassifier
+from classify_symb import PriceClassifier, SymbolsClassifier
 from split_symbols_cv import detect_text_cv
-from split_ruble_symbols import process_image
+from split_price_symbols import process_image
+from utils.os_utils import show_hist
 
 def resize_img_h(img, new_h):
+    """
+      Сжимание изображения под заданую высоту с сохранением пропорций
+      
+      @img - Входное изображение
+      @new_h - задаваемая высота
+      
+      @return - new_img(пережатое изображения),
+                scale (коэфициент масштабирования)
+    """
     scale = new_h / img.shape[0]
     new_size = np.array(img.shape) * scale 
     new_size = tuple(np.flipud(new_size[0:2]).astype(np.int))
@@ -34,6 +45,15 @@ def resize_img_h(img, new_h):
     
     
 def parse_mark(line, datapath, prefix=""):
+    """
+      Парсинг строки с боксом
+      
+      @line - тестовая строка с разметкой
+      @datapath - путь к папке с избражениями датасета
+      @prefix - префикс к изображениям в выборке
+    
+      @return - img(оригинальное изображение), cnt(контур бокса)
+    """
     s = line.split()
     img = cv2.imread(path.join(datapath, prefix + s[0]))
     
@@ -46,6 +66,18 @@ def parse_mark(line, datapath, prefix=""):
     
     
 def process_pricer(datapath, line, prefix="", new_h=700):
+    """
+      Подготовка ценника
+      Функция парсит разметку и пережимает изображение и контуры под заданный
+      размер
+      
+      @datapath - путь к папке с избражениями датасета
+      @line - тестовая строка с разметкой
+      @prefix - префикс к изображениям в выборке
+      @new_h - высота выходного изображения
+    
+      @return - img(изображение), cnt(контур бокса), scale(коэф. масштабир.)      
+    """
     img, cnt = parse_mark(line, datapath, prefix=prefix)
     if img is None:
         return None, cnt
@@ -54,7 +86,44 @@ def process_pricer(datapath, line, prefix="", new_h=700):
     return img, cnt, scale
     
     
-def extract_symbol_rects(crop, nm1, nm2, offset=(0,0), min_variance=1000):
+def open_pricer(datapath, line, prefix="", new_h=700):
+    """
+      Подготовка ценника
+      Функция парсит разметку и пережимает изображение и контуры под заданный
+      размер
+      
+      @datapath - путь к папке с избражениями датасета
+      @line - тестовая строка с разметкой
+      @prefix - префикс к изображениям в выборке
+      @new_h - высота выходного изображения
+    
+      @return - img(изображение), cnt(контур бокса), scale(коэф. масштабир.).
+                В случае не успешной обработки - None, None, None      
+    """
+    try:
+        img, cnt, scale = process_pricer(datapath,
+                                         line,
+                                         new_h=new_h)
+        return img, cnt, scale
+    except ValueError:
+        print("cant process image %s"%(path.join(datapath, key)))
+        return None, None, None
+    
+    
+def extract_symbol_rects(crop, nm1, nm2, offset=(0,0), min_variance=200):
+    """
+      Выделение боксов символов из названия ценника
+      
+      @crop - обрезанное название
+      @nm1 - путь к файлу NM1 классификатора
+      @nm1 - путь к файлу NM2 классификатора
+      @offset - отступ обрезанного названия
+      @min_variance - минимальная вариация в символе
+    
+      @return - img(изображение), cnt(контур бокса), scale(коэф. масштабир.).
+                В случае не успешной обработки - None, None, None      
+    """
+    
     rects, rects_bad = [], []
     regions = [[0,  crop.shape[0]]]#crop_regions(split_lines_hist(crop), crop.shape[0]*0.15)   
     for i in range(len(regions)):
@@ -63,7 +132,6 @@ def extract_symbol_rects(crop, nm1, nm2, offset=(0,0), min_variance=1000):
                                                   nm1, 
                                                   nm2,
                                                   min_variance=min_variance)
-        
         for rect in cur_rects:
             rect[1] += regions[i][0] + offset[1]
             rect[0] += offset[0]
@@ -74,10 +142,219 @@ def extract_symbol_rects(crop, nm1, nm2, offset=(0,0), min_variance=1000):
             rect[0] += offset[0]
             rects_bad.append(rect)
     return rects, rects_bad
+    
+        
+def process_name(datapath, key, line, new_h):
+    img, cnt, scale = open_pricer(datapath, line, new_h)
+        
+    if img is None:
+        print("cant open image %s"%(path.join(args.datapath, key)))
+        return [], None, img
+        
+    name_rect = cv2.boundingRect(cnt)
+    crop = img[name_rect[1]:name_rect[1]+name_rect[3],
+               name_rect[0]:name_rect[0]+name_rect[2]]
+    
+    if args.min_var > 0:
+        var = variance_of_laplacian(crop)
+        if args.img:
+            print("variance - %s"%(var))
+        if var < args.min_var:
+            raise Exception("%s too blured (%s < %s)"%(key, var,
+                            args.min_var))
+    try:
+        rects, rects_bad = extract_symbol_rects(crop, args.nm1,
+                                                args.nm2,
+                                                offset=(name_rect[0],
+                                                        name_rect[1]), 
+                                                min_variance=\
+                                                args.min_symb_var)
+        return rects, name_rect, img
+    except ValueError:
+        print("cant extract name symbols %s"%(path.join(datapath, key)))
+        return [], name_rect, img
+    
+        
+def process_price(datapath, key,  line, new_h):
+    img, cnt, scale = open_pricer(datapath, line, new_h)
+    
+    if img is None:
+        print("cant open image %s"%(path.join(args.datapath, key)))
+        return [], None
+    
+    price_rect = cv2.boundingRect(cnt)
+    crop = img[price_rect[1]:price_rect[1]+price_rect[3],
+               price_rect[0]:price_rect[0]+price_rect[2]]
+
+    try:
+        rects_price = extract_price_rects(crop, offset=(price_rect[0],
+                                                        price_rect[1]))
+        rects_price = sorted(rects_price, key=lambda x: x[0])
+        return rects_price, price_rect
+    except ValueError:
+        print("cant process image %s"%(path.join(args.datapath, key)))
+        return [], price_rect
 
 
-def extract_price_rects(img, offset=(0,0)):
-    rects = process_image(img)
+def calc_rect_var_gap_thrs(rects, w_perc):
+    variances = np.zeros((len(rects)))
+        
+    for i, symbol in enumerate(rects):
+        symb_img = img[symbol[1]: symbol[1] + symbol[3],
+                       symbol[0]: symbol[0] + symbol[2]]
+        variances[i] += symb_img.var()
+   
+    mean_var = np.mean(variances)
+    symb_vars_disp = np.sort(np.abs(variances[:] - mean_var))
+    var_thr = symb_vars_disp[int(len(symb_vars_disp)*w_perc)]  
+    
+    mean_var = variances[symb_vars_disp < var_thr].mean()
+    std_var = variances[symb_vars_disp < var_thr].std()
+    return mean_var, std_var
+    
+    
+def get_rect_text_lines(rects, conv_symb_h_ratio=2):
+    """
+      Выделение горизонтальных линий, соответсвующих строкам в тексте.
+      
+      @rects - Боксы символов
+      @conv_symb_h_ratio - Размер ядра свертки при сглаживании гистограммы
+      @return - Лист y-координат линий
+      @rparam - numpy.array
+    """
+    
+    symbols = np.zeros(img.shape[0:2], np.uint8)
+    for rect in rects:
+        symbols[rect[1]: rect[1] + rect[3],
+                rect[0]: rect[0] + rect[2]] = 255
+
+    hist = symbols.sum(axis=1)
+    mean_symb_h = int(np.mean(rects, axis=0)[3])
+    hist = np.convolve(hist, np.full((mean_symb_h//conv_symb_h_ratio),
+                                     1, np.int64),'same')
+    lines = argrelextrema(hist, np.greater_equal,
+                          order=mean_symb_h//conv_symb_h_ratio)[0]
+    lines = lines[hist[lines]>0]
+
+    #сливание близких строк
+    lines = [line for i, line in enumerate(lines) \
+             if i == len(lines) - 1 or not\
+             (hist[line] == hist[lines[i + 1]] and
+              lines[i + 1] - line < mean_symb_h)]
+    lines = np.sort(lines)
+    return lines
+    
+    
+def split_rects_by_strings(rects, conv_symb_h_ratio=2):
+    
+    """
+      Разделение символов текста на строки
+      
+      @rects - Боксы символов
+      @conv_symb_h_ratio - Размер ядра свертки при сглаживании гистограммы
+      @return - Отсортированнык боксы, разделенные по строкам
+      @rparam - list(list())
+    """
+    
+    if len(rects) == 0:
+        return None
+        
+    mean_symb_h = int(np.mean(rects, axis=0)[3])
+    lines = get_rect_text_lines(rects, conv_symb_h_ratio)
+    
+    strings = []
+    for line in lines:
+        rects_line = [rect for rect in rects \
+                      if abs((rect[1] + rect[3]/2) - line) < mean_symb_h]
+        rects_line = sorted(rects_line, key=lambda x: x[0])
+        strings.append(rects_line)
+    return strings
+    
+    
+def filter_rect_string(string, w_perc=0.8, std_perc=0.6,
+                       gap_mean_w_ratio=0.33, space_at_end=False):
+    """
+      Фильтрация боксов на строке
+      При фильтрации происходит детектирование пробелов и незахваченных
+      символов.
+      
+      Алгоритм:
+          1. Вычисление гистограммы расстояний между символами.
+          2. Оценка примерного количества пробелов на строке
+          3. Определение порога по оценке количества пробелов и гистограмме
+          4. Определение порога вариации по w_perc лучших символов
+          5. Порог по вариации умножается на std_perc
+          6. Боксы последовательно добавляются в выходной лист. Если
+             расстояние между боксами больше порога - проводится проверка
+             зазора между боксом и его классификация(пробел, символ)
+      
+      @string - боксы на строке
+      @w_perc - Процент лучших символов, по которым будет определяться порог
+      вариации
+      @std_perc - множитель для порога по вариации
+      @gap_mean_w_ratio - минимально допустимая ширина пробела относительно
+      средней ширины символа
+      @space_at_end - добавление в конец строки пробела
+    """
+    
+    distances = np.array(())
+    for i in range(len(string) - 1):
+        x1 = max(string[i][0], string[i][0] + string[i][2])
+        x2 = min(string[i + 1][0], string[i + 1][0] + \
+                 string[i + 1][2])
+        distances = np.append(distances, x2 - x1)
+        
+    hist, bins = np.histogram(distances, 8)
+    #show_hist(hist, bins)
+    hist = np.cumsum(hist[::-1])[::-1]
+    #show_hist(hist, bins)
+    
+    words_approx = len(string) / 7.2
+    gap_thr = np.argmax(hist < words_approx)
+    idx = np.argmax(hist == hist[gap_thr])
+    if bins[idx - 1] - bins[idx - 1] < words_approx / 3.0:
+        idx -= 1
+    gap_thr = bins[idx]
+
+    mean_symb_width = int(np.mean(string, axis=0)[2])
+    gap_thr = max(int(mean_symb_width*gap_mean_w_ratio), gap_thr)
+    
+    #print(gap_thr)
+    #show_hist(distances, np.arange(len(distances) + 1))
+    
+    mean_var, std_var = calc_rect_var_gap_thrs(rects, w_perc=w_perc)
+    
+    line_rects, undef_idx, space_idx = [], [], []
+    for i, symbol in enumerate(string):
+        line_rects.append(symbol)
+        if i + 1 < len(string):
+            if distances[i] > gap_thr:
+                symb_img = img[symbol[1]: symbol[1] + symbol[3],
+                               symbol[0]: symbol[0] + symbol[2]]
+                
+                symb2 = string[i + 1]
+                x0 = max(symbol[0] + symbol[2], symbol[0])
+                y0 = min(symbol[1], symb2[1])
+                x1 = min(symb2[0] + symb2[2], symb2[0])
+                y1 = max(symb2[1], symb2[1] + symb2[3])
+                
+                del_rect = [x0, y0, x1 - x0, y1 - y0]
+                line_rects.append(del_rect)
+                if symb_img.var() < mean_var + std_var*std_perc:
+                    space_idx.append(len(line_rects) - 1)
+                else:
+                    undef_idx.append(len(line_rects) - 1)
+        elif space_at_end:
+            del_rect = [symbol[0] + symbol[2], symbol[1], 
+                        symbol[3], symbol[3]]
+            line_rects.append(del_rect)
+            space_idx.append(len(line_rects) - 1)
+                    
+    return line_rects, undef_idx, space_idx
+
+
+def extract_price_rects(crop, offset=(0,0)):
+    rects = process_image(crop)
     for i in range(len(rects)):
         rects[i][0] += offset[0]
         rects[i][1] += offset[1]
@@ -85,6 +362,13 @@ def extract_price_rects(img, offset=(0,0)):
 
 
 def merge_mark_files(files):
+    """
+      Объединение нескольких файлов разметки в один
+      
+      @files - Список путей к файлам разметки
+      @return - Карта разметки с названиями файлов в качестве ключей 
+      @rparam - set
+    """
     markings = dict()
     for file in files:
         for line in open(file, "r").readlines():
@@ -144,42 +428,42 @@ def parse_args():
     name_net_proto_def = path.abspath(path.join(path.dirname(__file__),
                                                 "pretrained_classifiers/"
                                                 "symbols_net.prototxt"))
-    ml_group.add_argument('--name_net_model', type=file_arg,
+    ml_group.add_argument('--name_net_model',
                           default=name_net_proto_def,
                           help="Path symbol classify net .prototxt "
                           "(default - %s)."%(name_net_proto_def))
     name_net_weights_def = path.abspath(path.join(path.dirname(__file__),
                                                   "pretrained_classifiers/"
                                                   "symbols_iter_10000.caffemodel"))
-    ml_group.add_argument('--name_net_weights', type=file_arg,
+    ml_group.add_argument('--name_net_weights',
                           default=name_net_weights_def,
                           help="Path symbol classify net .caffemodel "
                           "(default - %s)."%(name_net_proto_def))
     name_net_dict_def = path.abspath(path.join(path.dirname(__file__),
                                                "pretrained_classifiers/"
                                                "symbols_lmdb_dict.json"))
-    ml_group.add_argument('--name_net_dict', type=file_arg,
+    ml_group.add_argument('--name_net_dict',
                           default=name_net_dict_def,
                           help="Path symbol classify net symbols dictionary"
                           "(default - %s)."%(name_net_dict_def))
     dig_net_proto_def = path.abspath(path.join(path.dirname(__file__),
                                                "pretrained_classifiers/"
                                                "price_1_net.prototxt"))
-    ml_group.add_argument('--digits_net_model', type=file_arg,
+    ml_group.add_argument('--digits_net_model',
                           default=dig_net_proto_def,
                           help="Path symbol classify net .prototxt "
                           "(default - %s)."%(name_net_proto_def))
     dig_net_weights_def = path.abspath(path.join(path.dirname(__file__),
                                                  "pretrained_classifiers/"
                                                  "price_1_iter_1000.caffemodel"))
-    ml_group.add_argument('--digits_net_weights', type=file_arg,
+    ml_group.add_argument('--digits_net_weights',
                           default=dig_net_weights_def,
                           help="Path symbol classify net .caffemodel "
                           "(default - %s)."%(name_net_proto_def))
     dig_net_dict_def = path.abspath(path.join(path.dirname(__file__),
                                               "pretrained_classifiers/"
                                               "price_1_lmdb_dict.json"))
-    ml_group.add_argument('--digits_net_dict', type=file_arg,
+    ml_group.add_argument('--digits_net_dict',
                           default=dig_net_dict_def,
                           help="Path symbol classify net symbols dictionary"
                           "(default - %s)."%(name_net_dict_def))
@@ -203,68 +487,6 @@ def parse_args():
     return parser.parse_args()
     
     
-def open_pricer(datapath, markings, new_h):
-    try:
-        img, cnt, scale = process_pricer(datapath,
-                                         markings,
-                                         new_h=new_h)
-        return img, cnt, scale
-    except ValueError:
-        print("cant process image %s"%(path.join(datapath, key)))
-        return None, None, None
-    
-        
-def process_name(datapath, key,  markings, new_h):
-    img, cnt, scale = open_pricer(datapath, markings, new_h)
-        
-    if img is None:
-        print("cant open image %s"%(path.join(args.datapath, key)))
-        return [], None, img
-        
-    name_rect = cv2.boundingRect(cnt)
-    crop = img[name_rect[1]:name_rect[1]+name_rect[3],
-               name_rect[0]:name_rect[0]+name_rect[2]]
-    
-    if args.min_var > 0:
-        var = variance_of_laplacian(crop)
-        if args.img:
-            print("variance - %s"%(var))
-        if var < args.min_var:
-            raise Exception("%s too blured (%s < %s)"%(key, var,
-                            args.min_var))
-    try:
-        rects, rects_bad = extract_symbol_rects(crop, args.nm1,
-                                                args.nm2,
-                                                offset=(name_rect[0],
-                                                        name_rect[1]), 
-                                                min_variance=\
-                                                args.min_symb_var)
-        return rects, name_rect, img
-    except ValueError:
-        print("cant extract name symbols %s"%(path.join(datapath, key)))
-        return [], name_rect, img
-    
-        
-def process_price(datapath, key,  markings, new_h):
-    img, cnt, scale = open_pricer(datapath, markings, new_h)
-    
-    if img is None:
-        print("cant open image %s"%(path.join(args.datapath, key)))
-        return [], None
-    
-    price_rect = cv2.boundingRect(cnt)
-    crop = img[price_rect[1]:price_rect[1]+price_rect[3],
-               price_rect[0]:price_rect[0]+price_rect[2]]
-
-    try:
-        rects_price = extract_price_rects(crop, offset=(price_rect[0],
-                                                        price_rect[1]))
-        return rects_price, price_rect
-    except ValueError:
-        print("cant process image %s"%(path.join(args.datapath, key)))
-        return [], price_rect
-    
-    
 if __name__ == "__main__":
     args = parse_args()
     
@@ -281,9 +503,9 @@ if __name__ == "__main__":
     name_recog = None
     digit_recog = None
     if args.out_json:
-        name_recog = NameClassifier(args.name_net_model,
-                                    args.name_net_weights,
-                                    args.name_net_dict)
+        name_recog = SymbolsClassifier(args.name_net_model,
+                                       args.name_net_weights,
+                                       args.name_net_dict)
         digit_recog = PriceClassifier(args.digits_net_model,
                                       args.digits_net_weights,
                                       args.digits_net_dict)
@@ -300,7 +522,8 @@ if __name__ == "__main__":
         makedirs(args.outdir)
     
     for key in batch:
-        rects, rects_rub, rects_kop = [], [], []
+        space_idxs, undef_idxs = [], []
+        strings, rects_rub, rects_kop = [], [], []
         name_rect, rub_rect, kop_rect = None, None, None
         scale = None
         if not path.exists(path.join(args.datapath, key)):
@@ -315,8 +538,18 @@ if __name__ == "__main__":
                 rects, name_rect, img = process_name(args.datapath, key,
                                                      names_marks[key],
                                                      new_h=args.resize_h)
+                strings = split_rects_by_strings(rects)
+                # фильтрация прямоугольников
+                str_all = []
+                for i in range(len(strings)):
+                    string, undef_idx, space_idx = filter_rect_string(strings[i])
+                    undef_idxs += list(np.array(undef_idx) + len(str_all))
+                    space_idxs += list(np.array(space_idx) + len(str_all))
+                    str_all += string
+                strings = str_all
+                
             except Exception as e:
-                print(e)
+                print("Exception: %s"%(e))
                 continue
         elif args.min_var > 0:
             continue
@@ -325,7 +558,7 @@ if __name__ == "__main__":
             rects_rub, rub_rect = process_price(args.datapath, key,
                                                 rubles_marks[key],
                                                 new_h=args.resize_h)
-            
+        
         if key in kopecks_marks:
             rects_kop, kop_rect = process_price(args.datapath, key,
                                                 kopecks_marks[key],
@@ -333,18 +566,26 @@ if __name__ == "__main__":
 
         vis = None
         if args.resize_out:
+            if img is None:
+                print("%s doesn't have name field"%(path.join(args.datapath,
+                                                              key)))
+                continue
             vis = img.copy()
         else:
             vis = cv2.imread(path.join(args.datapath, key))
             rects_kop = [(np.array(r)/scale).astype(np.int) for r in rects_kop]
             rects_rub = [(np.array(r)/scale).astype(np.int) for r in rects_rub]
-            rects = [(np.array(r)/scale).astype(np.int) for r in rects]
-        
+            for i in range(len(strings)):
+                strings[i] = [(np.array(r)/scale).astype(np.int) for r \
+                              in strings[i]]
+
+        # объединение отфильтрованных символов
         if args.out_box:
             out = open(path.join(args.outdir, 
                                  path.splitext(path.basename(key))[0] + 
                                  ".box"), "w")
-            batch = {"n": rects, "r": rects_rub, "k": rects_kop}
+            batch = {"n": strings,
+                     "r": rects_rub, "k": rects_kop}
             for ele in batch:
                 for rect in batch[ele]:
                     out.write("* %s %s %s %s 0 %s\n"%(int(rect[0]), 
@@ -355,7 +596,19 @@ if __name__ == "__main__":
             
         if args.out_json:
             dict_ = {"name": "", "rub": -1, "kop": -1}
-            dict_["name"] = name_recog.covert_rects_to_text(img, rects)
+            
+            name = np.array(["0" for i in range(len(strings))])
+            name[space_idxs] = " "
+            name[undef_idxs] = "*"
+            for i in range(name.shape[0]):
+                if name[i] == "0":
+                    symbol = strings[i]
+                    name[i] = name_recog.predict(img[symbol[1]: 
+                                                     symbol[1] + symbol[3],  
+                                                     symbol[0]:  
+                                                     symbol[0] + symbol[2]])[0]
+                        
+            dict_["name"] = "".join(name)
             try:
                 dict_["rub"] = digit_recog.covert_rects_to_price(img,
                                                                  rects_rub)
@@ -369,19 +622,30 @@ if __name__ == "__main__":
                       ensure_ascii=False)
                 
         if args.out_vis:
-            for rect in [name_rect, rub_rect, kop_rect]:
-                if rect:
-                    cv2.rectangle(vis, (rect[0], rect[1]), 
-                                  (rect[0] + rect[2], 
-                                   rect[1] + rect[3]), 
-                                  (255, 0, 0), 2)
-                              
-            for rects in [rects_kop, rects_rub, rects]:
+            #for rect in [name_rect, rub_rect, kop_rect]:
+            #    if rect:
+            #        cv2.rectangle(vis, (rect[0], rect[1]), 
+            #                      (rect[0] + rect[2], 
+            #                       rect[1] + rect[3]), 
+            #                      (255, 0, 0), 1)
+            
+            spaces = np.array(strings)[space_idxs]
+            undefs = np.array(strings)[undef_idxs]
+            symbols = np.delete(strings,
+                                np.append(space_idxs, undef_idxs), axis=0)
+            
+            for rects, color in [[symbols, (255,0,0)], [spaces, (0,255,255)],
+                                 [undefs, (255, 0,255)]]:
                 for rect in rects:
                     cv2.rectangle(vis, (rect[0], rect[1]),
                                   (rect[0] + rect[2], rect[1] + rect[3]),
-                                  (0, 255, 0), 2)
-                    
+                                  color, 1)
+                              
+            for rects in [rects_kop, rects_rub]:
+                for rect in rects:
+                    cv2.rectangle(vis, (rect[0], rect[1]),
+                                  (rect[0] + rect[2], rect[1] + rect[3]),
+                                  (0, 255, 0), 1)
             cv2.imwrite(path.join(args.outdir, key), vis)
             
         if args.img:
