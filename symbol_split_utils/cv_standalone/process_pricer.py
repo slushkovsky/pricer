@@ -22,7 +22,7 @@ if not main_dir in sys.path:
 del main_dir
 
 from classify_symb import PriceClassifier, NameClassifier
-from split_symbols_cv import detect_text_cv
+from split_symbols_cv import detect_text_cv, normalize_crop
 from split_ruble_symbols import process_image
 
 def resize_img_h(img, new_h):
@@ -212,8 +212,8 @@ def open_pricer(datapath, markings, new_h):
     except ValueError:
         print("cant process image %s"%(path.join(datapath, key)))
         return None, None, None
-    
-        
+       
+ 
 def process_name(datapath, key,  markings, new_h):
     img, cnt, scale = open_pricer(datapath, markings, new_h)
         
@@ -230,8 +230,11 @@ def process_name(datapath, key,  markings, new_h):
         if args.img:
             print("variance - %s"%(var))
         if var < args.min_var:
-            raise Exception("%s too blured (%s < %s)"%(key, var,
-                            args.min_var))
+            raise Exception("too blured (%s < %s)"%(var, args.min_var))
+            
+    img[name_rect[1]:name_rect[1]+name_rect[3],
+        name_rect[0]:name_rect[0]+name_rect[2]] = normalize_crop(crop)
+    
     try:
         rects, rects_bad = extract_symbol_rects(crop, args.nm1,
                                                 args.nm2,
@@ -316,7 +319,7 @@ if __name__ == "__main__":
                                                      names_marks[key],
                                                      new_h=args.resize_h)
             except Exception as e:
-                print(e)
+                print("%s Exception: %s"%(key, e))
                 continue
         elif args.min_var > 0:
             continue
