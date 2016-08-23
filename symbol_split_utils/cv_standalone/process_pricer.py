@@ -23,25 +23,8 @@ if not main_dir in sys.path:
 del main_dir
 
 from classify_symb import PriceClassifier, SymbolsClassifier
-from split_symbols_cv import detect_text_cv, normalize_crop
-from split_price_symbols import process_image
-
-def resize_img_h(img, new_h):
-    """
-      Сжимание изображения под заданую высоту с сохранением пропорций
-      
-      @img - Входное изображение
-      @new_h - задаваемая высота
-      
-      @return - new_img(пережатое изображения),
-                scale (коэфициент масштабирования)
-    """
-    scale = new_h / img.shape[0]
-    new_size = np.array(img.shape) * scale 
-    new_size = tuple(np.flipud(new_size[0:2]).astype(np.int))
-    new_img = cv2.resize(img, new_size)
-    return new_img, scale
-    
+from split_symbols_cv import detect_text_cv, normalize_crop, resize_h
+from split_price_symbols import process_image    
     
 def parse_mark(line, datapath, prefix=""):
     """
@@ -80,7 +63,7 @@ def process_pricer(datapath, line, prefix="", new_h=700):
     img, cnt = parse_mark(line, datapath, prefix=prefix)
     if img is None:
         return None, cnt
-    img, scale = resize_img_h(img, new_h=new_h)
+    img, scale = resize_h(img, new_h=new_h)
     cnt = (cnt * scale).astype(np.int)
     return img, cnt, scale
       
@@ -305,8 +288,8 @@ def split_rects_by_strings(rects, conv_symb_h_ratio=2):
     return strings
     
     
-def filter_rect_string(string, w_perc=0.8, std_perc=0.6,
-                       gap_mean_w_ratio=0.33, space_at_end=False):
+def filter_rect_string(string, w_perc=0.8, std_perc=0.8,
+                       gap_mean_w_ratio=0.2, space_at_end=False):
     """
       Фильтрация боксов на строке
       При фильтрации происходит детектирование пробелов и незахваченных
@@ -363,9 +346,6 @@ def filter_rect_string(string, w_perc=0.8, std_perc=0.6,
         line_rects.append(symbol)
         if i + 1 < len(string):
             if distances[i] > gap_thr:
-                symb_img = img[symbol[1]: symbol[1] + symbol[3],
-                               symbol[0]: symbol[0] + symbol[2]]
-                
                 symb2 = string[i + 1]
                 x0 = max(symbol[0] + symbol[2], symbol[0])
                 y0 = min(symbol[1], symb2[1])
@@ -373,8 +353,10 @@ def filter_rect_string(string, w_perc=0.8, std_perc=0.6,
                 y1 = max(symb2[1], symb2[1] + symb2[3])
                 
                 del_rect = [x0, y0, x1 - x0, y1 - y0]
+                del_img = img[del_rect[1]: del_rect[1] + del_rect[3],
+                              del_rect[0]: del_rect[0] + del_rect[2]]
                 line_rects.append(del_rect)
-                if symb_img.var() < mean_var + std_var*std_perc:
+                if del_img.var() < mean_var + std_var*std_perc:
                     space_idx.append(len(line_rects) - 1)
                 else:
                     undef_idx.append(len(line_rects) - 1)
@@ -587,9 +569,9 @@ if __name__ == "__main__":
                     str_all += string
                 strings = str_all
                 
-            except Exception as e:
+            except Exception as e: 
                 print("%s Exception: %s"%(key, e))
-                continue
+                continue  
             
         elif args.min_var > 0:
             continue

@@ -29,7 +29,6 @@ def metrical_interp(img, samples, knn_step=25, min_nn=5):
       @samples - Точки для аппроксимации в формате [[y, x, value],...]
       @knn_step - щаг сетки knn
       @min_nn - минимальное количество ближайших точек для аппроксимации
-    
     """
     img = img.copy()
     
@@ -196,14 +195,14 @@ def rescale_rects(rects, scale):
       Масштабирование боксов
       
       @rects - боксы символов
-      @scale - масштаб
+      @scale - Масштаб
     """
     
     for i in range(len(rects)):
-        rects[i][0] = int(rects[i][0] * scale[1])
-        rects[i][2] = int(rects[i][2] * scale[1])
-        rects[i][1] = int(rects[i][1] * scale[0])
-        rects[i][3] = int(rects[i][3] * scale[0])
+        rects[i][0] = int(rects[i][0] / scale)
+        rects[i][2] = int(rects[i][2] / scale)
+        rects[i][1] = int(rects[i][1] / scale)
+        rects[i][3] = int(rects[i][3] / scale)
         
     return rects
 
@@ -278,18 +277,19 @@ def find_rects_inside(rects):
     
 def resize_h(img, new_h):
     """
-      Перемасштабирование изображения под нужную высоту с сохранением
-      отношения сторон
+      Сжимание изображения под заданую высоту с сохранением пропорций
       
-      @img - Входное цветное изображенияю
-      @new_h - Высота выходного изображения
+      @img - Входное изображение
+      @new_h - задаваемая высота
+      
+      @return - new_img(пережатое изображения),
+                scale (коэфициент масштабирования)
     """
-    
-    w = int(new_h*img.shape[1]/img.shape[0])
-    scale = np.array(img.shape)
-    img = cv2.resize(img, (w, new_h))
-    scale = scale/np.array(img.shape)
-    return img, scale
+    scale = new_h / img.shape[0]
+    new_size = np.array(img.shape) * scale 
+    new_size = tuple(np.flipud(new_size[0:2]).astype(np.int))
+    new_img = cv2.resize(img, new_size)
+    return new_img, scale
     
     
 def detect_text_cv(img, nm1_path, nm2_path, min_variance=200,
