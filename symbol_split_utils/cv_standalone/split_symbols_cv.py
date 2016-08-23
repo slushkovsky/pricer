@@ -320,11 +320,15 @@ def detect_text_cv(img, nm1_path, nm2_path, min_variance=200,
       Контуры, смещенные меньше этого параметра будут объеденены.
       
     """
+    
     img, scale = resize_h(img, img_h)
     
     #clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(img_h//3,img_h//3))
     #for i in range(img.shape[2]):
     #    img[:,:,i] = clahe.apply(img[:,:,i])
+    
+    if len(img.shape) == 2:
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
     
     channels = cv2.text.computeNMChannels(img)
    

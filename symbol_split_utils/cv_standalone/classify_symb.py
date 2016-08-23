@@ -38,6 +38,12 @@ class SymbolsClassifier():
         self.out_layer_name = out_layer_name
         
     def predict(self, image):
+        if len(image.shape, ) == 2:
+            img_buf = np.zeros(image.shape + (3,), image.dtype)
+            for i in range(0,3):
+                img_buf[:,:,i] = image
+            image = img_buf
+        
         transformed_image = None
         shape = self.net.blobs['data'].shape
         if shape[1] == 1:

@@ -11,7 +11,7 @@ from argparse import ArgumentParser
 import cv2
 import numpy as np
 
-def process_image(img,  min_h_mask=0.15, min_symb_w=0.01,
+def process_image(img, min_h_mask=0.15, min_symb_w=0.01,
                   min_symb_h=0.4, thresh_steps=6, min_variance=1000):
     """
       Выделение символов на ценовых полях ценника.
@@ -35,7 +35,10 @@ def process_image(img,  min_h_mask=0.15, min_symb_w=0.01,
       @rtype list(list())
     """
     
-    gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+    if len(img.shape) == 2:
+        gray = img
+    else:
+        gray = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
     
     step = img.shape[1]//thresh_steps
     otsu = np.zeros(gray.shape, np.uint8)
