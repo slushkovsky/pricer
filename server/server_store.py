@@ -33,7 +33,7 @@ def parse_args():
         return value
         
     nets_path = path.join(path.abspath(path.join(__file__, "../..")),
-                          "trained_nets")
+                          "ml_data")
     
     class_store_path = path.join(nets_path, "class_store")
     class_store_proto_def = path.join(class_store_path, "store_net.prototxt")

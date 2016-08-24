@@ -394,7 +394,7 @@ def parse_args():
         return value
         
     nets_path = path.join(path.abspath(path.join(__file__, "../../..")),
-                          "trained_nets")
+                          "ml_data")
     
     class_dig_path = path.join(nets_path, "class_digits")
     class_dig_proto_def = path.join(class_dig_path, "digits_net.prototxt")

@@ -38,7 +38,7 @@ def parse_args():
         return value
         
     nets_path = path.join(path.abspath(path.join(__file__, "../..")),
-                          "trained_nets")
+                          "ml_data")
     
     loc_name_path = path.join(nets_path, "loc_names")
     name_loc_proto_def = path.join(loc_name_path, "names_net.prototxt")

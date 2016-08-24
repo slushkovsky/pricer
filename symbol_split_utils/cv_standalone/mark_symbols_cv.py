@@ -22,13 +22,23 @@ def parse_args():
                 raise Exception() 
         return value
         
+    nets_path = path.join(path.abspath(path.join(__file__, "../../..")),
+                          "ml_data")
+    
+    nm_path = path.join(nets_path, "NM")
+    nm1_def = path.join(nm_path,"trained_classifierNM1.xml")
+    nm2_def = path.join(nm_path,"trained_classifierNM1.xml") 
+        
+        
     parser = ArgumentParser()
     parser.add_argument('image', type=file_arg,
                         help="Path to image with name")
-    parser.add_argument('--nm1', type=file_arg,
-                        help="Path to pretrained NM1 dtree classifier")
-    parser.add_argument('--nm2', type=file_arg,
-                        help="Path to pretrained NM2 dtree classifier")
+    parser.add_argument('--nm1', type=file_arg, default=nm1_def,
+                        help="Path to pretrained NM1 dtree classifier "
+                        "(default - %s)"%(nm1_def))
+    parser.add_argument('--nm2', type=file_arg, default=nm2_def,
+                        help="Path to pretrained NM1 dtree classifier "
+                        "(default - %s)"%(nm2_def))
     return parser.parse_args()
     
 
@@ -38,26 +48,14 @@ if __name__ == "__main__":
     img = cv2.imread(args.image)
     regions = crop_regions(split_lines_hist(img),
                            img.shape[0]*0.15)
-    
-    nm1 = path.abspath(path.join(path.dirname(__file__), 
-                                 "pretrained_classifiers/"
-                                 "trained_classifierNM1.xml"))
-    nm2 = path.abspath(path.join(path.dirname(__file__), 
-                                 "pretrained_classifiers/"
-                                 "trained_classifierNM2.xml"))
-    
-    if not args.nm1 is None:
-        nm1 = args.nm1
-    if not args.nm2 is None:
-        nm2 = args.nm2
 
     rects, rects_bad = [], []
     
     for i in range(len(regions)):
         cur_img_part = img[regions[i][0]:regions[i][1],:]
         cur_rects, cur_rects_bad = detect_text_cv(cur_img_part,
-                                                  nm1, 
-                                                  nm2)
+                                                  args.nm1, 
+                                                  args.nm2)
         
         for rect in cur_rects:
             rect[1] += regions[i][0]
