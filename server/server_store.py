@@ -80,4 +80,4 @@ if __name__ == '__main__':
                                 args.store_net_weights,
                                 args.store_net_dict,
                                 out_layer="prob")
-    app.run(debug=True)
+    app.run(host='0.0.0.0', debug=False)

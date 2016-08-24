@@ -177,5 +177,5 @@ if __name__ == '__main__':
                                   args.digits_net_weights,
                                   args.digits_net_dict)
     
-    app.run(debug=True)
+    app.run(host='0.0.0.0', debug=False, port=5001)
     

@@ -249,6 +249,29 @@ def get_rect_text_lines(img, rects, conv_symb_h_ratio=2):
     lines = np.sort(lines)
     return lines
     
+def normalize_symb_height(rects):
+    """
+      Нормализация символов в строке по высоте
+      
+      @rects - Боксы символов
+    """
+    if len(rects) == 0:
+        return []
+    
+    y_min, y_max = rects[0][1], rects[0][1] + rects[0][3]
+    for rect in rects:
+        if rect[1] < y_min:
+            y_min = rect[1]
+        if rect[1] + rect[3] > y_max:
+            y_max = rect[1] + rect[3]
+        
+    h_new = y_max - y_min
+    for i in range(len(rects)):
+        rects[i][1] = y_min
+        rects[i][3] = h_new
+
+    return rects
+    
     
 def split_rects_by_strings(img, rects, conv_symb_h_ratio=2):
     
@@ -507,6 +530,9 @@ def process_pricer(img, nm1, nm2, name_сnt=None, rub_сnt=None, kop_сnt=None,
                                         min_var=min_var,
                                         min_symb_var=min_symb_var)
         strings = split_rects_by_strings(img, rects)
+        #for i in range(len(strings)):
+        #    strings[i] = normalize_symb_height(strings[i])
+
         # фильтрация прямоугольников
         str_all = []
         for i in range(len(strings)):
