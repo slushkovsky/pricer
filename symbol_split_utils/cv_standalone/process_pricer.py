@@ -263,7 +263,7 @@ def split_rects_by_strings(img, rects, conv_symb_h_ratio=2):
     """
     
     if len(rects) == 0:
-        return None
+        return []
         
     mean_symb_h = int(np.mean(rects, axis=0)[3])
     lines = get_rect_text_lines(img, rects, conv_symb_h_ratio)
@@ -393,6 +393,23 @@ def parse_args():
                 raise Exception() 
         return value
         
+    nets_path = path.join(path.abspath(path.join(__file__, "../../..")),
+                          "trained_nets")
+    
+    class_dig_path = path.join(nets_path, "class_digits")
+    class_dig_proto_def = path.join(class_dig_path, "digits_net.prototxt")
+    class_dig_weights_def = path.join(class_dig_path, "digits_net.caffemodel")
+    class_dig_dict_def = path.join(class_dig_path, "digits_net_dict.json")
+    
+    class_symb_path = path.join(nets_path, "class_symb")
+    class_symb_proto_def = path.join(class_symb_path, "symbols_net.prototxt")
+    class_symb_weights_def = path.join(class_symb_path, "symbols_net.caffemodel")
+    class_symb_dict_def = path.join(class_symb_path, "symbols_net_dict.json")
+    
+    nm_path = path.join(nets_path, "NM")
+    nm1_def = path.join(nm_path,"trained_classifierNM1.xml")
+    nm2_def = path.join(nm_path,"trained_classifierNM1.xml")    
+        
     parser = ArgumentParser()
     
     data_group = parser.add_argument_group("Data Settings")
@@ -413,66 +430,36 @@ def parse_args():
     params_group.add_argument("--min_var", type=int, default=-1,
                               help="Minimal variance of pricer name field. -1 "
                               "if disabled (default - (-1)).")
-    params_group.add_argument("--min_symb_var", type=int, default=1000,
-                              help="Minimal variance of pricer (default 1000).")
+    params_group.add_argument("--min_symb_var", type=int, default=200,
+                              help="Minimal variance of pricer (default 200).")
     
     ml_group = parser.add_argument_group("ML Pretrained Files")
-    nm1_default = path.abspath(path.join(path.dirname(__file__),
-                                         "pretrained_classifiers/"
-                                         "trained_classifierNM1.xml"))
-    ml_group.add_argument('--nm1', type=file_arg,
-                          default=nm1_default,
+    ml_group.add_argument('--nm1', type=file_arg, default=nm1_def,
                           help="Path to pretrained NM1 dtree classifier "
-                          "(default - %s)."%(nm1_default))
-    nm2_default = path.abspath(path.join(path.dirname(__file__),
-                                         "pretrained_classifiers/"
-                                         "trained_classifierNM2.xml"))
-    ml_group.add_argument('--nm2', type=file_arg,
-                          default=nm2_default,
+                          "(default - %s)."%(nm1_def))
+    ml_group.add_argument('--nm2', type=file_arg, default=nm2_def,
                           help="Path to pretrained NM2 dtree classifier "
-                          "(default - %s)."%(nm2_default))
-    name_net_proto_def = path.abspath(path.join(path.dirname(__file__),
-                                                "pretrained_classifiers/"
-                                                "symbols_net.prototxt"))
-    ml_group.add_argument('--name_net_model',
-                          default=name_net_proto_def,
+                          "(default - %s)."%(nm2_def))
+    
+    ml_group.add_argument('--name_net_model', default=class_symb_proto_def,
                           help="Path symbol classify net .prototxt "
-                          "(default - %s)."%(name_net_proto_def))
-    name_net_weights_def = path.abspath(path.join(path.dirname(__file__),
-                                                  "pretrained_classifiers/"
-                                                  "symbols_iter_10000.caffemodel"))
-    ml_group.add_argument('--name_net_weights',
-                          default=name_net_weights_def,
+                          "(default - %s)."%(class_symb_proto_def))
+    ml_group.add_argument('--name_net_weights', default=class_symb_weights_def,
                           help="Path symbol classify net .caffemodel "
-                          "(default - %s)."%(name_net_proto_def))
-    name_net_dict_def = path.abspath(path.join(path.dirname(__file__),
-                                               "pretrained_classifiers/"
-                                               "symbols_lmdb_dict.json"))
-    ml_group.add_argument('--name_net_dict',
-                          default=name_net_dict_def,
+                          "(default - %s)."%(class_symb_weights_def))
+    ml_group.add_argument('--name_net_dict', default=class_symb_dict_def,
                           help="Path symbol classify net symbols dictionary"
-                          "(default - %s)."%(name_net_dict_def))
-    dig_net_proto_def = path.abspath(path.join(path.dirname(__file__),
-                                               "pretrained_classifiers/"
-                                               "price_1_net.prototxt"))
-    ml_group.add_argument('--digits_net_model',
-                          default=dig_net_proto_def,
+                          "(default - %s)."%(class_symb_dict_def))
+    
+    ml_group.add_argument('--digits_net_model', default=class_dig_proto_def,
                           help="Path symbol classify net .prototxt "
-                          "(default - %s)."%(name_net_proto_def))
-    dig_net_weights_def = path.abspath(path.join(path.dirname(__file__),
-                                                 "pretrained_classifiers/"
-                                                 "price_1_iter_1000.caffemodel"))
-    ml_group.add_argument('--digits_net_weights',
-                          default=dig_net_weights_def,
+                          "(default - %s)."%(class_dig_proto_def))
+    ml_group.add_argument('--digits_net_weights', default=class_dig_weights_def,
                           help="Path symbol classify net .caffemodel "
-                          "(default - %s)."%(name_net_proto_def))
-    dig_net_dict_def = path.abspath(path.join(path.dirname(__file__),
-                                              "pretrained_classifiers/"
-                                              "price_1_lmdb_dict.json"))
-    ml_group.add_argument('--digits_net_dict',
-                          default=dig_net_dict_def,
+                          "(default - %s)."%(class_dig_weights_def))
+    ml_group.add_argument('--digits_net_dict', default=class_dig_dict_def,
                           help="Path symbol classify net symbols dictionary"
-                          "(default - %s)."%(name_net_dict_def))
+                          "(default - %s)."%(class_dig_dict_def))
     
     output_group = parser.add_argument_group("Output Settings")
     out_def = path.join(path.dirname(__file__),"split_data")
