@@ -78,5 +78,6 @@ if __name__ == '__main__':
     
     store_recog = Classificator(args.store_net_model,
                                 args.store_net_weights,
-                                args.store_net_dict)
+                                args.store_net_dict,
+                                out_layer="prob")
     app.run(debug=True)

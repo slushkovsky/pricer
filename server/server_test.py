@@ -13,7 +13,6 @@ from argparse import ArgumentParser
 from os import path, remove
 
 import cv2
-import numpy as np
 
 def parse_args():
     def file_arg(value): 

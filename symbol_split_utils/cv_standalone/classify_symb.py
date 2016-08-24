@@ -66,6 +66,10 @@ class PriceClassifier(SymbolsClassifier):
     def covert_rects_to_price(self, img, rects):
         rubles = ""
         rects = sorted(rects, key=lambda x: x[0])
+        
+        if len(rects) == 0:
+            return -1
+        
         for symbol in rects:
                 sym = self.predict(img[symbol[1]: symbol[1] + symbol[3], 
                                        symbol[0]: symbol[0] + symbol[2]])
