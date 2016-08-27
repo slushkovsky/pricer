@@ -135,12 +135,44 @@ def extract_symbol_rects(crop, nm1, nm2, offset=(0,0), min_variance=200):
             rects_bad.append(rect)
     return rects, rects_bad
     
+    
+def get_rect_from_cnt(cnt, img):
+    """
+      Получение ограничивающего прямоугольника из контура и его коррекция.
+      
+      Функция корректирует контуры, выходящие за пределы изображения.
+      
+      @cnt - контур
+      @img - изображение
+    """
+    bound_rect = list(cv2.boundingRect(cnt))
+    
+    if bound_rect[2] == 0 or bound_rect[3] == 0:
+        raise Exception("cnt size width or height = 0")
+        
+    if bound_rect[0] < 0:
+        bound_rect[2] = bound_rect[2] + bound_rect[0]
+        bound_rect[0] = 0
+
+    if bound_rect[1] < 0:
+        bound_rect[3] = bound_rect[3] + bound_rect[1]
+        bound_rect[1] = 0
+
+    if bound_rect[2] < img.shape[1]:
+        bound_rect[2] = img.shape[1] - 1
+
+    if bound_rect[3] < img.shape[0]:
+        bound_rect[3] = img.shape[0] - 1
+
+    return tuple(bound_rect)
+    
      
 def process_name(img, cnt, nm1, nm2, min_var=0, min_symb_var=0):    
     if img is None:
         raise Exception("image is None")
         
-    name_rect = cv2.boundingRect(cnt)
+    name_rect = get_rect_from_cnt(cnt, img)
+    
     crop = img[name_rect[1]:name_rect[1]+name_rect[3],
                name_rect[0]:name_rect[0]+name_rect[2]]
 
@@ -170,7 +202,7 @@ def process_price(img, cnt):
     if img is None:
         raise Exception("image is None")
     
-    price_rect = cv2.boundingRect(cnt)
+    price_rect = get_rect_from_cnt(cnt, img)
     crop = img[price_rect[1]:price_rect[1]+price_rect[3],
                price_rect[0]:price_rect[0]+price_rect[2]]
 
@@ -349,7 +381,6 @@ def filter_rect_string(img, string, w_perc=0.8, std_perc=0.8,
     mean_symb_width = int(np.mean(string, axis=0)[2])
     gap_thr = max(int(mean_symb_width*gap_mean_w_ratio), gap_thr)
     
-    #print(gap_thr)
     #show_hist(distances, np.arange(len(distances) + 1))
     
     mean_var, std_var = calc_rect_var_gap_thrs(img, string, w_perc=w_perc)
@@ -536,6 +567,8 @@ def process_pricer(img, nm1, nm2, name_сnt=None, rub_сnt=None, kop_сnt=None,
         # фильтрация прямоугольников
         str_all = []
         for i in range(len(strings)):
+            if len(strings[i]) == 0:
+                continue
             string, undef_idx, space_idx = filter_rect_string(img, strings[i])
             undef_idxs += list(np.array(undef_idx) + len(str_all))
             space_idxs += list(np.array(space_idx) + len(str_all))
