@@ -72,6 +72,7 @@ def prepare_mark(datapath, line, prefix="", new_h=700):
     """
     img, cnt = parse_mark(line, datapath, prefix=prefix)
     if img is None:
+                
         return None, cnt
     img, scale = resize_h(img, new_h=new_h)
     cnt = (cnt * scale).astype(np.int)
@@ -151,18 +152,18 @@ def get_rect_from_cnt(cnt, img):
         raise Exception("cnt size width or height = 0")
         
     if bound_rect[0] < 0:
-        bound_rect[2] = bound_rect[2] + bound_rect[0]
+        bound_rect[2] += bound_rect[0]
         bound_rect[0] = 0
 
     if bound_rect[1] < 0:
-        bound_rect[3] = bound_rect[3] + bound_rect[1]
+        bound_rect[3] += bound_rect[1]
         bound_rect[1] = 0
 
-    if bound_rect[2] < img.shape[1]:
-        bound_rect[2] = img.shape[1] - 1
+    if bound_rect[2] > img.shape[1] - bound_rect[0]:
+        bound_rect[2] = img.shape[1] - bound_rect[0]
 
-    if bound_rect[3] < img.shape[0]:
-        bound_rect[3] = img.shape[0] - 1
+    if bound_rect[3] > img.shape[0] - bound_rect[1]:
+        bound_rect[3] = img.shape[0] - bound_rect[1]
 
     return tuple(bound_rect)
     
